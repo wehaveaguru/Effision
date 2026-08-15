@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1a1a1a; font-size: 11px; }
+  h1 { font-size: 20px; margin-bottom: 0; }
+  .subtitle { color: #666; margin-top: 4px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; background: #f2f2f2; padding: 8px; border-bottom: 2px solid #ddd; }
+  td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .confidence { font-variant-numeric: tabular-nums; }
+  .confidence.high { color: #157a3d; }
+  .confidence.mid { color: #a06400; }
+  .confidence.low { color: #a02020; }
+  .empty { color: #888; font-style: italic; padding: 24px 0; }
+</style>
+</head>
+<body>
+  <h1>Product Brain — Explainability Report</h1>
+  <div class="subtitle">Generated {{ generated_at }} UTC &middot; {{ rows|length }} approved fact{{ '' if rows|length == 1 else 's' }}</div>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Relation</th>
+        <th>Value</th>
+        <th>Confidence</th>
+        <th>Source Document</th>
+        <th>Reviewed By</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.product }}</td>
+        <td>{{ r.relation }}</td>
+        <td>{{ r.value }}</td>
+        <td class="confidence {{ 'high' if r.confidence >= 0.8 else ('mid' if r.confidence >= 0.5 else 'low') }}">
+          {{ '%.0f' % (r.confidence * 100) }}%
+        </td>
+        <td>{{ r.source_file }}</td>
+        <td>{{ r.reviewed_by or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No approved facts yet — the review queue is empty or nothing has been approved.</p>
+  {% endif %}
+</body>
+</html>
