@@ -1,0 +1,27 @@
+.PHONY: install db-up db-down seed run dry-run-sample report test
+
+install:
+	pip install -r requirements.txt --break-system-packages
+
+# Real-Postgres dev path (optional — the app also works with zero setup
+# via the local SQLite shim in app/db/supabase_client.py)
+db-up:
+	docker compose up -d db
+
+db-down:
+	docker compose down
+
+seed:
+	python scripts/seed_local.py
+
+run:
+	uvicorn app.main:app --reload --port 8000
+
+dry-run-sample:
+	python scripts/run_pipeline.py data/sample_docs/camber_bolt_specsheet.txt --dry-run
+
+report:
+	python -c "from app.explain.report import render_report; print(render_report())"
+
+test:
+	pytest -v

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: product_brain
+    ports:
+      - "5432:5432"
+    volumes:
+      - product_brain_pgdata:/var/lib/postgresql/data
+      - ./app/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+
+volumes:
+  product_brain_pgdata:
