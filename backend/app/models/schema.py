@@ -79,3 +79,34 @@ class ReviewQueueItem(BaseModel):
     source_node: Node
     target_node: Node
     source_document: SourceDocument
+
+
+# ---------------------------------------------------------------------------
+# Ingestor models
+# ---------------------------------------------------------------------------
+
+class RawProduct(BaseModel):
+    """Schema used by LlamaCloud Extract to pull rows from tabular files
+    (CSV, XLSX). Field names mirror what LlamaCloud returns for e-commerce
+    product sheets."""
+
+    product_name: str = Field(description="The product name")
+    brand_name: str = Field(description="What brand the product is related to")
+    product_price: float = Field(description="Amount of money received in procurement")
+    product_image: str = Field(description="Link to product image")
+    product_star_rating: float = Field(description="Ratings of a product")
+    number_of_ratings: int = Field(description="Number of ratings")
+
+
+class EnrichedProduct(BaseModel):
+    """Groq-enriched product profile produced by DocumentIngestor."""
+
+    title: str
+    brand: str
+    category_hierarchy: list[str] = Field(default_factory=list)
+    summary: str
+    enriched_description: str
+    key_features: list[str] = Field(default_factory=list)
+    technical_specifications: dict[str, Any] = Field(default_factory=dict)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    search_keywords: list[str] = Field(default_factory=list)

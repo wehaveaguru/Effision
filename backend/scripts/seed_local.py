@@ -9,7 +9,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+load_dotenv(find_dotenv())
 
 from app.db.supabase_client import get_client  # noqa: E402
 

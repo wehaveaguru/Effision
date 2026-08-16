@@ -18,7 +18,11 @@ import json
 import os
 import re
 
+from dotenv import find_dotenv, load_dotenv
+
 from app.models.schemas import ParsedDocument, SegregatedField, SegregationResult
+
+load_dotenv(find_dotenv())
 
 _SEGREGATION_SYSTEM_PROMPT = """You are a product-data extraction engine.
 Given raw text from a supplier spec sheet, extract structured fields.

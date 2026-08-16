@@ -23,6 +23,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from dotenv import find_dotenv, load_dotenv
+
+_env_path = find_dotenv()
+if not _env_path:
+    for candidate in [
+        Path(__file__).parent.parent / ".env",
+        Path(__file__).parent.parent.parent / ".env",
+        Path.cwd() / ".env",
+        Path.cwd() / "app" / ".env",
+    ]:
+        if candidate.is_file():
+            _env_path = str(candidate)
+            break
+load_dotenv(_env_path)
+
+
 def _default_db_path() -> Path:
     # Read the env var lazily (not at import time) so tests can point this
     # at a fresh tmp_path per test via monkeypatch.
@@ -115,11 +131,12 @@ class _QueryBuilder:
             for jcol in ("properties", "value"):
                 if jcol in row and not isinstance(row[jcol], str):
                     row[jcol] = json.dumps(row[jcol])
-            cols = ", ".join(row.keys())
-            placeholders = ", ".join("?" for _ in row)
+            keys = list(row.keys())
+            cols = ", ".join(keys)
+            placeholders = ", ".join("?" for _ in keys)
             cur.execute(
                 f"insert into {self._table} ({cols}) values ({placeholders})",
-                list(row.values()),
+                [row[k] for k in keys],
             )
             out_rows.append(row)
         self._conn.commit()
@@ -128,13 +145,18 @@ class _QueryBuilder:
                 if jcol in r and isinstance(r[jcol], str):
                     try:
                         r[jcol] = json.loads(r[jcol])
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, TypeError):
                         pass
         return ShimResponse(data=out_rows)
 
     def _do_update(self) -> ShimResponse:
-        set_clause = ", ".join(f"{k} = ?" for k in self._payload)
-        vals = list(self._payload.values())
+        payload = dict(self._payload) if isinstance(self._payload, dict) else {}
+        for jcol in ("properties", "value"):
+            if jcol in payload and not isinstance(payload[jcol], str):
+                payload[jcol] = json.dumps(payload[jcol])
+        keys = list(payload.keys())
+        set_clause = ", ".join(f"{k} = ?" for k in keys)
+        vals = [payload[k] for k in keys]
         where_clause, where_vals = self._build_where()
         cur = self._conn.cursor()
         cur.execute(
@@ -273,4 +295,4 @@ def get_client():
         _client_singleton = create_client(url, key)
     else:
         _client_singleton = LocalPostgresShim()
-    return _client_singleton
+    return _client_singleton
