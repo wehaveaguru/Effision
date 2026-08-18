@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Effision — Intelligent Product Information Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Instrument Serif & Instrument Sans fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="apple-theme dark-mode">
+
+  <!-- Background ambient glow aura -->
+  <div class="ambient-glow">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+  </div>
+
+  <!-- Global Header Navigation -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="brand-group">
+        <div class="brand-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Effision</span>
+          <span class="brand-badge">PIM Studio</span>
+        </div>
+      </div>
+
+      <!-- Segmented Navigation Bar -->
+      <nav class="nav-segmented-control" id="nav-tabs">
+        <button class="nav-tab active" data-tab="catalog" id="tab-catalog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Catalog
+        </button>
+        <button class="nav-tab" data-tab="search" id="tab-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          Semantic Search
+        </button>
+        <button class="nav-tab" data-tab="review" id="tab-review">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Review Queue
+          <span class="tab-badge-counter" id="badge-review-count">0</span>
+        </button>
+        <button class="nav-tab" data-tab="graph" id="tab-graph">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Graph
+        </button>
+        <button class="nav-tab" data-tab="ingest" id="tab-ingest">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Add Product
+        </button>
+      </nav>
+
+      <!-- Right Header Actions -->
+      <div class="header-actions">
+        <div class="connection-status" id="connection-pill" title="Supabase pgvector active">
+          <span class="status-dot"></span>
+          <span class="status-label">Supabase Connected</span>
+        </div>
+        <button class="cmd-k-trigger" id="cmd-k-btn" title="Press ⌘K or Ctrl+K">
+          <span>Search Vector DB</span>
+          <kbd>⌘K</kbd>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-viewport">
+
+    <!-- Hero Bento Stats Banner -->
+    <section class="hero-bento-section">
+      <div class="hero-header-row">
+        <div class="hero-title-group">
+          <span class="hero-eyebrow">Enterprise Product Brain</span>
+          <h1 class="hero-headline">Industrial Catalog Intelligence.</h1>
+          <p class="hero-subtext">AI-enriched specifications, vector embeddings, and verified provenance knowledge graphs for procurement.</p>
+        </div>
+      </div>
+
+      <div class="bento-grid">
+        <div class="bento-card card-primary">
+          <div class="bento-card-header">
+            <span class="bento-label">Vector Catalog</span>
+            <div class="bento-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            </div>
+          </div>
+          <div class="bento-metric" id="stat-total-products">--</div>
+          <div class="bento-footer">
+            <span class="pill-tag green">Indexed in pgvector</span>
+            <span class="bento-subinfo">384 Dimensions</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <span class="bento-label">Active Brands</span>
+            <div class="bento-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </div>
+          </div>
+          <div class="bento-metric" id="stat-total-brands">--</div>
+          <div class="bento-footer">
+            <span class="pill-tag blue" id="stat-top-brands">3M, Diablo, Mirka</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <span class="bento-label">Extraction Accuracy</span>
+            <div class="bento-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+          </div>
+          <div class="bento-metric" id="stat-avg-conf">98.4%</div>
+          <div class="bento-footer">
+            <span class="pill-tag purple">Groq Enriched</span>
+            <span class="bento-subinfo">Provenance Tracked</span>
+          </div>
+        </div>
+
+        <div class="bento-card">
+          <div class="bento-card-header">
+            <span class="bento-label">Human Review Queue</span>
+            <div class="bento-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+            </div>
+          </div>
+          <div class="bento-metric" id="stat-pending-reviews">0</div>
+          <div class="bento-footer">
+            <span class="pill-tag orange">Pending Approval</span>
+            <span class="bento-subinfo">Propose-only rule</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 1: CATALOG VIEW -->
+    <section class="tab-content active" id="view-catalog">
+      <!-- Filter Bar -->
+      <div class="catalog-toolbar">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="catalog-filter-input" placeholder="Filter by part number, title, or keyword..." />
+        </div>
+
+        <!-- Brand Filter Pills -->
+        <div class="brand-filter-pills" id="brand-filter-container">
+          <button class="pill-btn active" data-brand="">All Brands</button>
+          <button class="pill-btn" data-brand="Diablo">Diablo</button>
+          <button class="pill-btn" data-brand="3M">3M</button>
+          <button class="pill-btn" data-brand="Mirka">Mirka</button>
+        </div>
+
+        <!-- Layout Controls -->
+        <div class="view-mode-toggle">
+          <button class="view-btn active" id="btn-view-grid" title="Grid View">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+          <button class="view-btn" id="btn-view-table" title="Table View">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Products Grid Container -->
+      <div class="products-grid" id="products-container">
+        <!-- Rendered dynamically -->
+        <div class="loading-shimmer-card"></div>
+        <div class="loading-shimmer-card"></div>
+        <div class="loading-shimmer-card"></div>
+      </div>
+    </section>
+
+    <!-- TAB 2: SEMANTIC SEARCH STUDIO -->
+    <section class="tab-content" id="view-search">
+      <div class="search-studio-card">
+        <div class="search-studio-header">
+          <span class="studio-badge">Neural Vector Search</span>
+          <h2 class="studio-title">Natural Language Catalog Query</h2>
+          <p class="studio-subtext">Search across 384-dimensional dense vector embeddings in Supabase with cosine distance scoring.</p>
+        </div>
+
+        <div class="search-hero-box">
+          <div class="search-hero-input-wrap">
+            <svg class="search-hero-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="semantic-search-input" placeholder="Try 'abrasive sanding belt for metal' or 'coarse grinding disc P80'..." />
+            <button class="btn-primary-glow" id="btn-run-search">
+              <span>Execute Search</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <!-- Quick Suggestion Pills -->
+          <div class="quick-queries">
+            <span class="quick-label">Try:</span>
+            <button class="quick-chip" data-query="sanding belt abrasive for aggressive stock removal">sanding belt abrasive</button>
+            <button class="quick-chip" data-query="3M Cubitron grinding disc P120">3M Cubitron P120</button>
+            <button class="quick-chip" data-query="Mirka Abranet mesh finishing belt">Mirka Abranet belt</button>
+            <button class="quick-chip" data-query="Diablo 1/2 inch 18 inch belt">Diablo 1/2"x18"</button>
+          </div>
+        </div>
+
+        <!-- Search Results Panel -->
+        <div class="search-results-section" id="search-results-container">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
+            </div>
+            <h3>Type a natural language prompt</h3>
+            <p>Vector search queries are encoded into 384-dimensional embeddings and matched using the match_documents pgvector function.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: REVIEW QUEUE -->
+    <section class="tab-content" id="view-review">
+      <div class="review-header-bar">
+        <div>
+          <span class="hero-eyebrow">Human-in-the-Loop Governance</span>
+          <h2 class="section-title">Attribute Extraction Review Queue</h2>
+          <p class="hero-subtext">Review AI-proposed specifications before promoting them to the permanent knowledge graph.</p>
+        </div>
+        <div class="review-filter-actions">
+          <button class="btn-secondary" id="btn-refresh-review">Refresh Queue</button>
+        </div>
+      </div>
+
+      <div class="review-queue-list" id="review-queue-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 4: KNOWLEDGE GRAPH -->
+    <section class="tab-content" id="view-graph">
+      <div class="graph-card">
+        <div class="graph-card-header">
+          <div>
+            <span class="studio-badge">Graph Topology</span>
+            <h2 class="studio-title">Product & Attribute Relationship Graph</h2>
+          </div>
+          <div class="graph-controls">
+            <button class="pill-btn active" id="btn-graph-approved">Approved Edges</button>
+            <button class="pill-btn" id="btn-graph-proposed">Proposed Edges</button>
+          </div>
+        </div>
+        <div class="graph-canvas-wrapper" id="graph-container">
+          <canvas id="graphCanvas"></canvas>
+          <div class="graph-legend">
+            <div class="legend-item"><span class="node-dot product"></span> Product</div>
+            <div class="legend-item"><span class="node-dot brand"></span> Brand</div>
+            <div class="legend-item"><span class="node-dot category"></span> Category</div>
+            <div class="legend-item"><span class="node-dot spec"></span> Attribute</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: INGESTION / ADD PRODUCT STUDIO -->
+    <section class="tab-content" id="view-ingest">
+      <div class="ingest-grid">
+        <div class="ingest-card">
+          <div class="card-title-group">
+            <span class="studio-badge">Direct PIM Creator</span>
+            <h2 class="card-title">Add & Auto-Enrich Product</h2>
+            <p class="hero-subtext">Directly create a product entry. The backend will generate dense 384-dim embeddings and store in Supabase.</p>
+          </div>
+
+          <form id="form-add-product" class="apple-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Product Title / Name *</label>
+                <input type="text" id="inp-title" required placeholder="e.g. Diablo DCB518ASTS06G 1/2&quot;x18&quot; Sanding Belt" />
+              </div>
+              <div class="form-group">
+                <label>Brand *</label>
+                <input type="text" id="inp-brand" required placeholder="e.g. Diablo / Freud / 3M" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>1-2 Sentence Value Hook (Summary) *</label>
+              <textarea id="inp-summary" rows="2" required placeholder="Punchy core value proposition and key applications..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Comprehensive Technical Description *</label>
+              <textarea id="inp-description" rows="3" required placeholder="Full technical overview, use cases, compatibility, material composition..."></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Key Features (comma separated)</label>
+                <input type="text" id="inp-features" placeholder="1/2&quot; Width, 18&quot; Length, Pack of 6, Durable Abrasive" />
+              </div>
+              <div class="form-group">
+                <label>Category Hierarchy (comma separated)</label>
+                <input type="text" id="inp-categories" placeholder="Abrasives, Sanding Belts, Industrial" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Search Keywords (comma separated)</label>
+              <input type="text" id="inp-keywords" placeholder="diablo, sanding belt, abrasive, wood, metal" />
+            </div>
+
+            <button type="submit" class="btn-primary-glow" id="btn-submit-product">
+              <span>Embed & Save to Supabase</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+          </form>
+        </div>
+
+        <div class="ingest-card">
+          <div class="card-title-group">
+            <span class="studio-badge">Batch File Processing</span>
+            <h2 class="card-title">Automated Pipeline</h2>
+            <p class="hero-subtext">Commands to run batch ingestion for full catalogs.</p>
+          </div>
+
+          <div class="pipeline-instruction-box">
+            <div class="cmd-snippet">
+              <div class="snippet-header">
+                <span>Ingest Unihack Procurement CSV (1,000 items)</span>
+                <button class="btn-copy" onclick="copySnippet('python -X utf8 scripts/ingest_unihack_csv.py')">Copy</button>
+              </div>
+              <code>python -X utf8 scripts/ingest_unihack_csv.py</code>
+            </div>
+
+            <div class="cmd-snippet">
+              <div class="snippet-header">
+                <span>Ingest Specific Custom CSV</span>
+                <button class="btn-copy" onclick="copySnippet('python -X utf8 scripts/ingest_unihack_csv.py --csv path/to/file.csv')">Copy</button>
+              </div>
+              <code>python -X utf8 scripts/ingest_unihack_csv.py --csv path/to/file.csv</code>
+            </div>
+
+            <div class="cmd-snippet">
+              <div class="snippet-header">
+                <span>Ingest PDF / Spec Sheet through LlamaParse</span>
+                <button class="btn-copy" onclick="copySnippet('python scripts/run_pipeline.py Annual_Procurement_Report.pdf')">Copy</button>
+              </div>
+              <code>python scripts/run_pipeline.py Annual_Procurement_Report.pdf</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Slide-Over Product Spec Drawer / Modal -->
+  <div class="drawer-overlay" id="product-drawer-overlay">
+    <div class="product-drawer" id="product-drawer">
+      <div class="drawer-header">
+        <div class="drawer-brand-group">
+          <span class="pill-tag blue" id="drawer-brand">Brand</span>
+          <span class="pill-tag gray" id="drawer-id">ID: #</span>
+        </div>
+        <button class="drawer-close-btn" id="btn-close-drawer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="drawer-scroll-body">
+        <h2 class="drawer-product-title" id="drawer-title">Product Title</h2>
+        
+        <div class="drawer-category-breadcrumb" id="drawer-categories">
+          <!-- Breadcrumb tags -->
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">Core Value Proposition</h4>
+          <div class="drawer-hook-quote" id="drawer-summary">
+            "Summary text here..."
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">Enriched Specification & Overview</h4>
+          <p class="drawer-description" id="drawer-description">
+            Detailed description here...
+          </p>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">Key Features & Highlights</h4>
+          <ul class="drawer-features-list" id="drawer-features">
+            <!-- Features rendered here -->
+          </ul>
+        </div>
+
+        <div class="drawer-section" id="drawer-specs-section">
+          <h4 class="drawer-section-heading">Technical Specifications</h4>
+          <div class="specs-table-wrapper">
+            <table class="apple-specs-table" id="drawer-specs-table">
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">Search Keywords</h4>
+          <div class="keywords-cloud" id="drawer-keywords">
+            <!-- Keywords rendered here -->
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <h4 class="drawer-section-heading">Vector Embedding Fingerprint (384 Dimensions)</h4>
+          <div class="vector-fingerprint-box">
+            <canvas id="vectorCanvas" width="400" height="60"></canvas>
+            <div class="vector-meta">Dense float vector indexed via pgvector HNSW</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Command Palette Modal (⌘K) -->
+  <div class="cmd-palette-overlay" id="cmd-palette-overlay">
+    <div class="cmd-palette-modal">
+      <div class="cmd-search-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="cmd-input" placeholder="Ask anything: 'find abrasive belts for metal sanding'..." autofocus />
+        <span class="esc-badge">ESC</span>
+      </div>
+      <div class="cmd-results" id="cmd-results">
+        <div class="cmd-hint">Type a query to run semantic similarity against Supabase pgvector index...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
