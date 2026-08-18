@@ -147,89 +147,11 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your_supabase_anon_or_service_role_key
 ```
 
-### 3. Initialize Supabase Vector Database
-
-Run [`backend/app/db/schema.sql`](backend/app/db/schema.sql) in your **Supabase SQL Editor**:
-
-```sql
--- 1. Enable pgvector extension
-create extension if not exists vector;
-
--- 2. Create documents table with 384 dimensions
-create table if not exists documents (
-    id bigint primary key generated always as identity,
-    content text not null,
-    metadata jsonb default '{}'::jsonb,
-    embedding vector(384)
-);
-
--- 3. Create HNSW index for ultra-fast cosine similarity search
-create index if not exists documents_embedding_hnsw_idx 
-on documents using hnsw (embedding vector_cosine_ops);
-
--- 4. Disable RLS or add permissive policies for API access
-alter table documents disable row level security;
-
--- 5. Create match_documents RPC
-create or replace function match_documents (
-  query_embedding vector(384),
-  match_threshold float default 0.3,
-  match_count int default 5
-)
-returns table (
-  id bigint,
-  content text,
-  metadata jsonb,
-  similarity float
-)
-language sql stable
-as $$
-  select
-    documents.id,
-    documents.content,
-    documents.metadata,
-    1 - (documents.embedding <=> query_embedding) as similarity
-  from documents
-  where 1 - (documents.embedding <=> query_embedding) > match_threshold
-  order by similarity desc
-  limit match_count;
-$$;
-```
-
 ---
 
 ## 🚀 Running the Project
 
-### 1. Ingest Products into Supabase Vector DB
-
-Ingest the industrial catalog with Groq AI enrichment and local vector embedding:
-
-```bash
-# Ingest entire 1,000-row catalog
-python -X utf8 scripts/ingest_unihack_csv.py
-
-# Ingest first 20 rows for quick testing
-python -X utf8 scripts/ingest_unihack_csv.py --limit 20
-
-# Dry-run test (no database writes)
-python -X utf8 scripts/ingest_unihack_csv.py --limit 5 --dry-run
-```
-
-### 2. Query the Vector Database via CLI
-
-```bash
-# 1. List all rows in Supabase
-python -X utf8 scripts/query_vector_db.py --list
-
-# 2. Test semantic search with natural language
-python -X utf8 scripts/query_vector_db.py --query "sanding belt for metal and wood"
-python -X utf8 scripts/query_vector_db.py --query "3M cubitron grinding disc P120" --top-k 3
-
-# 3. Insert custom test product directly
-python -X utf8 scripts/query_vector_db.py --insert-test "Bosch 18V Cordless Drill with Brushless Motor" --title "Bosch 18V Drill" --brand "Bosch"
-```
-
-### 3. Launch the PIM Web Application
+### 1. Launch the PIM Web Application
 
 Start the FastAPI backend server (which automatically hosts the static PIM web app):
 
@@ -252,21 +174,6 @@ The frontend interface incorporates Apple's Human Interface Guidelines (HIG):
 * **Review Queue**: Human-in-the-loop governance interface to approve or reject AI-proposed specifications.
 * **Knowledge Graph Explorer**: Interactive canvas rendering relationships between Products, Brands, Categories, and Specs.
 * **Global Command Palette (`⌘K` / `Ctrl+K`)**: Quick vector search from anywhere in the app.
-
----
-
-## 📡 REST API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/products` | List enriched products from Supabase with pagination & brand filters |
-| `GET` | `/api/products/stats` | Retrieve PIM catalog metrics (total products, brands, accuracy) |
-| `POST` | `/api/products/search` | Execute vector semantic search using cosine similarity |
-| `POST` | `/api/products/insert` | Embed & insert a new enriched product into Supabase |
-| `GET` | `/graph?status=approved` | Retrieve nodes and edges for knowledge graph visualization |
-| `GET` | `/edges/queue` | List AI-proposed attributes awaiting human review |
-| `POST` | `/edges/{id}/review` | Approve or reject a proposed edge with reviewer attribution |
-| `GET` | `/health` | API health check endpoint |
 
 ---
 
