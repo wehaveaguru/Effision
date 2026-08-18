@@ -295,4 +295,4 @@ def get_client():
         _client_singleton = create_client(url, key)
     else:
         _client_singleton = LocalPostgresShim()
-    return _client_singleton
+    return _client_singleton

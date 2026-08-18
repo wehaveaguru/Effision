@@ -13,7 +13,11 @@ create table if not exists documents (
 create index if not exists documents_embedding_hnsw_idx 
 on documents using hnsw (embedding vector_cosine_ops);
 
--- 4. Create the match RPC function
+-- 4. Disable RLS so the anon/service key can insert freely
+--    (fine for a hackathon; re-enable + add policies before going to prod)
+alter table documents disable row level security;
+
+-- 5. Create the match RPC function
 create or replace function match_documents (
   query_embedding vector(384),
   match_threshold float default 0.3,

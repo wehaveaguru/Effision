@@ -86,16 +86,15 @@ class ReviewQueueItem(BaseModel):
 # ---------------------------------------------------------------------------
 
 class RawProduct(BaseModel):
-    """Schema used by LlamaCloud Extract to pull rows from tabular files
-    (CSV, XLSX). Field names mirror what LlamaCloud returns for e-commerce
-    product sheets."""
+    """Schema used to represent rows from the Unihack procurement CSV
+    (``Unihack_ Sample.csv``).  Field names map 1-to-1 to the CSV columns."""
 
-    product_name: str = Field(description="The product name")
-    brand_name: str = Field(description="What brand the product is related to")
-    product_price: float = Field(description="Amount of money received in procurement")
-    product_image: str = Field(description="Link to product image")
-    product_star_rating: float = Field(description="Ratings of a product")
-    number_of_ratings: int = Field(description="Number of ratings")
+    mfg_part_num: str = Field(description="Manufacturer part number (SKU)")
+    part_desc: str = Field(description="Full product / part description")
+    e1_brand: str = Field(description="Brand name as stored in the E1 system")
+    unilog_brand: str = Field(description="Brand name as stored in Unilog")
+    dib_brand: str = Field(description="Brand name as stored in DIB")
+    part_manuf: str = Field(description="Manufacturer name and identifier")
 
 
 class EnrichedProduct(BaseModel):

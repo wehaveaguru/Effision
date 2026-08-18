@@ -13,16 +13,18 @@ real segregation logic.
 """
 
 from __future__ import annotations
+from groq import Groq
+from dotenv import load_dotenv,find_dotenv
 
 import json
 import os
 import re
 
-from dotenv import find_dotenv, load_dotenv
-
-from app.models.schemas import ParsedDocument, SegregatedField, SegregationResult
-
 load_dotenv(find_dotenv())
+
+
+# pyrefly: ignore [missing-import]
+from app.models.schemas import ParsedDocument, SegregatedField, SegregationResult
 
 _SEGREGATION_SYSTEM_PROMPT = """You are a product-data extraction engine.
 Given raw text from a supplier spec sheet, extract structured fields.
@@ -47,7 +49,7 @@ def segregate_document(doc: ParsedDocument) -> SegregationResult:
 
 
 def _segregate_via_groq(doc: ParsedDocument, api_key: str) -> SegregationResult:
-    from groq import Groq  # imported lazily — optional dep
+      # imported lazily — optional dep
 
     client = Groq(api_key=api_key)
     completion = client.chat.completions.create(

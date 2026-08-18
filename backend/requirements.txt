@@ -9,6 +9,8 @@ supabase==2.7.4          # optional — only needed if SUPABASE_URL/KEY are set
 # pipeline
 llama-cloud-services==0.6.94   # optional — only needed for .pdf/.docx parsing
 groq==0.11.0                   # optional — only needed for real segregation
+sentence-transformers>=2.7.0   # embedding model (all-MiniLM-L6-v2, 384-dim)
+pandas>=2.0.0                  # CSV ingestion for Unihack dataset
 
 # explainability report
 jinja2==3.1.4

@@ -1,7 +1,9 @@
 import os
 from typing import List, Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
-from backend.app.db.supabase_client import supabase
+from app.db.supabase_client import get_client
+
+supabase = get_client()
 
 # Initialize the embedding model (runs locally on CPU/GPU)
 # all-MiniLM-L6-v2 generates 384-dimensional dense vectors

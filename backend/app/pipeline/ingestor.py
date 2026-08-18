@@ -35,6 +35,8 @@ from dotenv import find_dotenv, load_dotenv
 
 from app.models.schemas import EnrichedProduct, ParsedDocument, RawProduct
 
+
+
 # ---------------------------------------------------------------------------
 # Env loading — walk up from the module location to find .env
 # ---------------------------------------------------------------------------
@@ -100,7 +102,7 @@ Guidelines:
 - Process every product present in the input list.
 - Return ONLY the JSON object. No markdown fences or preamble.\
 """
-
+load_dotenv(find_dotenv())
 
 # ---------------------------------------------------------------------------
 # IngestResult — unified output type
@@ -178,8 +180,10 @@ class _LlamaParseStrategy:
                 f"Parsing {path.name} requires LlamaCloud. "
                 "Set the key in .env or convert the doc to .txt for offline testing."
             )
-
-        from llama_cloud_services import LlamaParse  # optional dep, imported lazily
+        try:
+            from llama_cloud_services import LlamaParse
+        except ImportError:
+            from llama_parse import LlamaParse
 
         parser = LlamaParse(api_key=api_key, result_type="markdown")
         result = parser.parse(str(path))
@@ -208,9 +212,10 @@ class _LlamaExtractStrategy:
     3. Batch rows -> Groq (llama-3.3-70b-versatile) -> EnrichedProduct list
     """
 
-    BATCH_SIZE: int = 5
+    BATCH_SIZE: int = 3               # smaller batches → fewer tokens per call
     POLL_INTERVAL_S: int = 2
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    INTER_BATCH_SLEEP_S: float = 8.0  # pause between batches to stay under TPM
 
     def ingest(self, path: Path) -> IngestResult:
         llama_key = os.environ.get("LLAMA_CLOUD_API_KEY")
@@ -228,9 +233,16 @@ class _LlamaExtractStrategy:
             )
 
         from groq import Groq  # optional dep, imported lazily
-        from llama_cloud import LlamaCloud  # optional dep, imported lazily
+        try:
+            from llama_cloud.client import LlamaCloud
+        except ImportError:
+            from llama_cloud import LlamaCloud
 
-        llama_client = LlamaCloud(api_key=llama_key)
+        try:
+            llama_client = LlamaCloud(token=llama_key)
+        except TypeError:
+            llama_client = LlamaCloud(api_key=llama_key)
+
         groq_client = Groq(api_key=groq_key)
 
         rows = self._extract(path, llama_client)
@@ -247,6 +259,38 @@ class _LlamaExtractStrategy:
 
     def _extract(self, path: Path, client: Any) -> list[dict[str, Any]]:
         """Upload file to LlamaCloud Extract and poll until job is done."""
+        if hasattr(client, "llama_extract"):
+            from llama_cloud.types import ExtractConfig, ExtractTarget
+
+            with open(path, "rb") as fh:
+                uploaded = client.files.upload_file(upload_file=fh)
+
+            job = client.llama_extract.extract_stateless(
+                file_id=uploaded.id,
+                data_schema=RawProduct.model_json_schema(),
+                config=ExtractConfig(
+                    extraction_target=ExtractTarget.PER_TABLE_ROW,
+                    tier="agentic",
+                ),
+            )
+
+            terminal = {"COMPLETED", "FAILED", "CANCELLED", "SUCCESS"}
+            while str(getattr(job.status, "value", job.status)).upper() not in terminal:
+                time.sleep(self.POLL_INTERVAL_S)
+                job = client.llama_extract.get_job(job.id)
+
+            status_str = str(getattr(job.status, "value", job.status)).upper()
+            if status_str not in {"COMPLETED", "SUCCESS"}:
+                raise RuntimeError(
+                    f"LlamaCloud Extract job failed with status: {status_str}"
+                )
+
+            res = client.llama_extract.get_job_result(job.id)
+            if hasattr(res, "data") and isinstance(res.data, list):
+                return res.data
+            return getattr(job, "extract_result", []) or []
+
+        # Legacy llama_cloud client API fallback
         with open(path, "rb") as fh:
             uploaded = client.files.create(file=fh, purpose="extract")
 
@@ -285,18 +329,38 @@ class _LlamaExtractStrategy:
 
         for idx, batch in enumerate(batches):
             print(f"[ingestor] Enriching batch {idx + 1}/{len(batches)}...")
-            response = groq_client.chat.completions.create(
-                model=self.GROQ_MODEL,
-                messages=[
-                    {"role": "system", "content": _ENRICHMENT_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": f"Enrich these products:\n{json.dumps(batch)}",
-                    },
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.2,
-            )
+
+            # Retry with exponential backoff on rate-limit errors.
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    response = groq_client.chat.completions.create(
+                        model=self.GROQ_MODEL,
+                        messages=[
+                            {"role": "system", "content": _ENRICHMENT_SYSTEM_PROMPT},
+                            {
+                                "role": "user",
+                                "content": f"Enrich these products:\n{json.dumps(batch)}",
+                            },
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.2,
+                    )
+                    break  # success — exit retry loop
+                except Exception as exc:
+                    err_str = str(exc).lower()
+                    if "rate_limit" in err_str or "429" in err_str:
+                        wait = 2 ** (attempt + 2)  # 4s, 8s, 16s, 32s, 64s
+                        print(
+                            f"[ingestor] Rate limit hit on batch {idx + 1}, "
+                            f"retrying in {wait}s (attempt {attempt + 1}/{max_retries})..."
+                        )
+                        time.sleep(wait)
+                        if attempt == max_retries - 1:
+                            raise
+                    else:
+                        raise
+
             payload = json.loads(response.choices[0].message.content)
             for item in payload.get("products", []):
                 try:
@@ -311,6 +375,10 @@ class _LlamaExtractStrategy:
                             enriched_description=item.get("enriched_description", ""),
                         )
                     )
+
+            # Brief pause between batches to respect Groq's free-tier TPM cap.
+            if idx < len(batches) - 1:
+                time.sleep(self.INTER_BATCH_SLEEP_S)
 
         return enriched
 

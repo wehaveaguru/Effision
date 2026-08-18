@@ -3,6 +3,7 @@ import time
 import json
 from dotenv import load_dotenv
 from groq import Groq
+# pyrefly: ignore [missing-import]
 from llama_cloud import LlamaCloud
 from pydantic import BaseModel, Field
 
@@ -103,4 +104,4 @@ for idx, batch in enumerate(llm_batches):
     else:
         enriched_catalog.append(batch_products)
 
-        
+print(enriched_catalog[0])
