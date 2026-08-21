@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 load_dotenv(find_dotenv())
 
 from app.pipeline.graph_model import write_segregation_result, write_source_document  # noqa: E402
-from app.pipeline.parse import parse_document  # noqa: E402
+from app.pipeline.ingestor import parse_document  # noqa: E402
 from app.pipeline.segregate import segregate_document  # noqa: E402
 
 

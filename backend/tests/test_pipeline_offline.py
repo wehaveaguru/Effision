@@ -1,4 +1,4 @@
-from app.pipeline.parse import parse_document
+from app.pipeline.ingestor import parse_document
 from app.pipeline.segregate import segregate_document
 
 SAMPLE = "data/sample_docs/camber_bolt_specsheet.txt"
