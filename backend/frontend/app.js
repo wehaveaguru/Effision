@@ -58,7 +58,7 @@ let currentSearchQuery = "";
 let activeViewMode = "grid";
 
 // API Base URL (Relative for seamless reverse proxy / static mount)
-const API_BASE = "";
+const API_BASE = "http://localhost:8000";
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
@@ -129,7 +129,7 @@ async function fetchStats() {
       document.getElementById("badge-review-count").textContent = stats.proposed_edges || 0;
       return;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // Fallback stats
   document.getElementById("stat-total-products").textContent = allProducts.length;
@@ -140,7 +140,7 @@ async function fetchStats() {
 function updateBrandFilterPills(brands) {
   const container = document.getElementById("brand-filter-container");
   if (!container) return;
-  
+
   let html = `<button class="pill-btn ${currentFilterBrand === '' ? 'active' : ''}" data-brand="">All Brands</button>`;
   brands.forEach(b => {
     if (!b) return;
@@ -213,7 +213,7 @@ function renderCatalog() {
     const brand = meta.brand || "Industrial";
     const summary = meta.summary || (p.content || "").slice(0, 120) + "...";
     const partNum = meta.attributes?.part_number || meta.technical_specifications?.["Part Number"] || `ID-${p.id}`;
-    
+
     const specs = Object.entries(meta.technical_specifications || {})
       .slice(0, 3)
       .map(([k, v]) => `<span class="spec-chip">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`)
@@ -337,14 +337,14 @@ function renderSearchResults(results, queryText) {
   container.innerHTML = `
     <div class="search-results-list">
       ${results.map((r, idx) => {
-        const meta = r.metadata || {};
-        const title = meta.title || "Product #" + r.id;
-        const brand = meta.brand || "Industrial";
-        const sim = r.similarity || 0.85;
-        const simPercent = (sim * 100).toFixed(1);
-        const excerpt = meta.summary || (r.content || "").slice(0, 150) + "...";
+    const meta = r.metadata || {};
+    const title = meta.title || "Product #" + r.id;
+    const brand = meta.brand || "Industrial";
+    const sim = r.similarity || 0.85;
+    const simPercent = (sim * 100).toFixed(1);
+    const excerpt = meta.summary || (r.content || "").slice(0, 150) + "...";
 
-        return `
+    return `
           <div class="search-result-row" onclick="openProductDrawer(${r.id})">
             <div class="result-main-col">
               <div class="card-badges" style="margin-bottom: 0.35rem;">
@@ -360,7 +360,7 @@ function renderSearchResults(results, queryText) {
             </div>
           </div>
         `;
-      }).join("")}
+  }).join("")}
     </div>
   `;
 }
@@ -389,7 +389,7 @@ function openProductDrawer(productId) {
   if (!product) return;
 
   const meta = product.metadata || {};
-  
+
   document.getElementById("drawer-brand").textContent = meta.brand || "Industrial";
   document.getElementById("drawer-id").textContent = `SKU: ${meta.attributes?.part_number || product.id}`;
   document.getElementById("drawer-title").textContent = meta.title || product.content.slice(0, 60);
@@ -474,7 +474,7 @@ async function fetchReviewQueue() {
       renderReviewQueue(items);
       return;
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // Fallback demo items
   const demoReviews = [
@@ -542,7 +542,7 @@ async function handleReviewDecision(edgeId, decision) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision: decision, reviewed_by: "ProductManager" })
     });
-  } catch (e) {}
+  } catch (e) { }
 
   const card = document.getElementById(`review-card-${edgeId}`);
   if (card) {
