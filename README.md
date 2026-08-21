@@ -177,6 +177,4 @@ The frontend interface incorporates Apple's Human Interface Guidelines (HIG):
 
 ---
 
-## 📄 License & Attribution
 
-Built for **Unihacks Hackathon** by **Team Effision**. Distributed under the MIT License.
