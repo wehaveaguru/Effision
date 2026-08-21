@@ -3,19 +3,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
 from app.db.supabase_client import get_client
+from app.db.vector_service import get_embedding, get_embeddings_batch
 
 router = APIRouter(prefix="/api/products", tags=["products"])
-
-_embed_model = None
-
-def get_embed_model():
-    global _embed_model
-    if _embed_model is None:
-        _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embed_model
 
 
 class ProductSearchQuery(BaseModel):
@@ -96,15 +88,13 @@ def get_catalog_stats():
 
 @router.post("/search")
 def search_products(req: ProductSearchQuery):
-    """Semantic vector search against Supabase using all-MiniLM-L6-v2."""
+    """Semantic vector search against Supabase using Groq nomic-embed-text-v1.5."""
     if not req.query.strip():
         return {"query": req.query, "count": 0, "results": []}
-        
+
     client = get_client()
-    model = get_embed_model()
-    q_vec = model.encode(req.query).tolist()
-    
     try:
+        q_vec = get_embedding(req.query)
         resp = client.rpc(
             "match_documents",
             {
@@ -126,8 +116,7 @@ def search_products(req: ProductSearchQuery):
 def insert_product(req: ProductInsertRequest):
     """Insert and embed a new enriched product into Supabase."""
     client = get_client()
-    model = get_embed_model()
-    
+
     parts = [
         req.title,
         f"Brand: {req.brand}" if req.brand else "",
@@ -137,8 +126,8 @@ def insert_product(req: ProductInsertRequest):
         "Keywords: " + ", ".join(req.search_keywords) if req.search_keywords else "",
     ]
     content = "\n".join(filter(None, parts))
-    embedding = model.encode(content).tolist()
-    
+    embedding = get_embedding(content)
+
     metadata = {
         "title": req.title,
         "brand": req.brand,
@@ -150,12 +139,12 @@ def insert_product(req: ProductInsertRequest):
         "attributes": req.attributes,
         "search_keywords": req.search_keywords,
     }
-    
+
     payload = {
         "content": content,
         "metadata": metadata,
         "embedding": embedding,
     }
-    
+
     resp = client.table("documents").insert(payload).execute()
     return {"status": "success", "data": resp.data}

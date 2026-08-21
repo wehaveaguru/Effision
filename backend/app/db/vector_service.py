@@ -1,19 +1,48 @@
 import os
 from typing import List, Dict, Any, Optional
-from sentence_transformers import SentenceTransformer
 from app.db.supabase_client import get_client
 
 supabase = get_client()
 
-# Initialize the embedding model (runs locally on CPU/GPU)
-# all-MiniLM-L6-v2 generates 384-dimensional dense vectors
-embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-
 
 def get_embedding(text: str) -> List[float]:
-    """Generate a 384-dimension vector embedding using sentence-transformers."""
-    embedding = embed_model.encode(text)
-    return embedding.tolist()
+    """Generate a dense vector embedding via Groq's embedding API (nomic-embed-text-v1.5, 768-dim).
+    Falls back to a zero-vector stub if GROQ_API_KEY is not set (dev/test only).
+    """
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        # Stub: return a 768-dim zero vector so the server starts without credentials
+        return [0.0] * 768
+
+    import httpx
+
+    resp = httpx.post(
+        "https://api.groq.com/openai/v1/embeddings",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"model": "nomic-embed-text-v1.5", "input": text},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["data"][0]["embedding"]
+
+
+def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
+    """Batch embed multiple texts.  Groq accepts a list as 'input'."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return [[0.0] * 768 for _ in texts]
+
+    import httpx
+
+    resp = httpx.post(
+        "https://api.groq.com/openai/v1/embeddings",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"model": "nomic-embed-text-v1.5", "input": texts},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = sorted(resp.json()["data"], key=lambda x: x["index"])
+    return [d["embedding"] for d in data]
 
 
 def insert_document(content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -34,7 +63,7 @@ def insert_documents_batch(documents: List[Dict[str, Any]]) -> Dict[str, Any]:
     Expected format: [{'content': '...', 'metadata': {...}}, ...]
     """
     contents = [doc["content"] for doc in documents]
-    embeddings = embed_model.encode(contents).tolist()
+    embeddings = get_embeddings_batch(contents)
 
     records = []
     for doc, emb in zip(documents, embeddings):
@@ -49,9 +78,9 @@ def insert_documents_batch(documents: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def search_documents(
-    query: str, 
-    match_threshold: float = 0.3, 
-    match_count: int = 5
+    query: str,
+    match_threshold: float = 0.3,
+    match_count: int = 5,
 ) -> List[Dict[str, Any]]:
     """Query the Supabase vector index using semantic cosine similarity."""
     query_vector = get_embedding(query)
@@ -66,39 +95,3 @@ def search_documents(
     ).execute()
 
     return response.data
-
-
-# --- Demonstration / Testing ---
-if __name__ == "__main__":
-    print("Testing Vector Database Operations...\n")
-
-    # 1. Insert sample documents
-    sample_docs = [
-        {
-            "content": "Supabase provides PostgreSQL with pgvector support for AI applications.",
-            "metadata": {"category": "database", "source": "docs"},
-        },
-        {
-            "content": "SentenceTransformers allows running embedding models offline on CPU.",
-            "metadata": {"category": "nlp", "source": "docs"},
-        },
-        {
-            "content": "FastAPI is a Python web framework for building APIs.",
-            "metadata": {"category": "backend", "source": "web"},
-        },
-    ]
-
-    print("Inserting batch documents...")
-    inserted = insert_documents_batch(sample_docs)
-    print(f"Inserted {len(inserted)} records successfully.\n")
-
-    # 2. Perform a semantic similarity search
-    search_query = "How to run vector embeddings locally without cloud APIs?"
-    print(f"Searching for: '{search_query}'")
-
-    results = search_documents(search_query, match_threshold=0.2, match_count=2)
-    print("\nSearch Results:")
-    for idx, match in enumerate(results, 1):
-        print(f"{idx}. [Similarity: {match['similarity']:.4f}]")
-        print(f"   Content: {match['content']}")
-        print(f"   Metadata: {match['metadata']}\n")
