@@ -4,45 +4,29 @@ from app.db.supabase_client import get_client
 
 supabase = get_client()
 
+_embed_model = None
+
+def _get_model():
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embed_model
+
 
 def get_embedding(text: str) -> List[float]:
-    """Generate a dense vector embedding via Groq's embedding API (nomic-embed-text-v1.5, 768-dim).
-    Falls back to a zero-vector stub if GROQ_API_KEY is not set (dev/test only).
-    """
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        # Stub: return a 768-dim zero vector so the server starts without credentials
-        return [0.0] * 768
-
-    import httpx
-
-    resp = httpx.post(
-        "https://api.groq.com/openai/v1/embeddings",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"model": "nomic-embed-text-v1.5", "input": text},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()["data"][0]["embedding"]
+    """Generate a dense 384-dimension vector embedding via SentenceTransformer (all-MiniLM-L6-v2)."""
+    model = _get_model()
+    embedding = model.encode(text)
+    return embedding.tolist()
 
 
 def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
-    """Batch embed multiple texts.  Groq accepts a list as 'input'."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        return [[0.0] * 768 for _ in texts]
+    """Batch embed multiple texts into 384-dimension vectors."""
+    model = _get_model()
+    embeddings = model.encode(texts)
+    return embeddings.tolist()
 
-    import httpx
-
-    resp = httpx.post(
-        "https://api.groq.com/openai/v1/embeddings",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"model": "nomic-embed-text-v1.5", "input": texts},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = sorted(resp.json()["data"], key=lambda x: x["index"])
-    return [d["embedding"] for d in data]
 
 
 def insert_document(content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

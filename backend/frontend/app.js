@@ -560,55 +560,151 @@ async function handleReviewDecision(edgeId, decision) {
    ========================================================================== */
 function initProductForm() {
   const form = document.getElementById("form-add-product");
+  const resultBox = document.getElementById("add-product-result");
   if (!form) return;
 
   form.addEventListener("submit", async e => {
     e.preventDefault();
 
-    const title = document.getElementById("inp-title").value.trim();
-    const brand = document.getElementById("inp-brand").value.trim();
-    const summary = document.getElementById("inp-summary").value.trim();
-    const description = document.getElementById("inp-description").value.trim();
-    const features = document.getElementById("inp-features").value.split(",").map(s => s.trim()).filter(Boolean);
-    const categories = document.getElementById("inp-categories").value.split(",").map(s => s.trim()).filter(Boolean);
-    const keywords = document.getElementById("inp-keywords").value.split(",").map(s => s.trim()).filter(Boolean);
+    const partName = document.getElementById("inp-part-name").value.trim();
+    const partNum = document.getElementById("inp-part-num")?.value.trim() || "";
+    const brand = document.getElementById("inp-brand")?.value.trim() || "";
+    const notes = document.getElementById("inp-notes")?.value.trim() || "";
+
+    if (!partName) {
+      showToast("Please enter a product name or description.");
+      return;
+    }
 
     const payload = {
-      title: title,
+      part_name: partName,
+      part_num: partNum,
       brand: brand,
-      summary: summary,
-      enriched_description: description,
-      category_hierarchy: categories,
-      key_features: features,
-      technical_specifications: { "Brand": brand, "Type": categories[0] || "Hardware" },
-      attributes: { "brand": brand },
-      search_keywords: keywords
+      manufacturer: brand,
+      notes_or_specs: notes,
     };
 
     const submitBtn = document.getElementById("btn-submit-product");
     submitBtn.disabled = true;
-    submitBtn.innerHTML = `<span>Embedding & Saving...</span>`;
+    submitBtn.innerHTML = `<span>🧠 AI Enriching & Generating Vectors...</span>`;
+
+    if (resultBox) {
+      resultBox.style.display = "block";
+      resultBox.innerHTML = `
+        <div class="ingest-stat-pill" style="text-align: left; padding: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-blue);">
+            <span class="status-dot"></span>
+            <strong>Running Autonomous Pipeline:</strong>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.4rem;">
+            1. Groq LLM enriching title, specs & summary<br/>
+            2. Generating 384-dim vector embedding<br/>
+            3. Inserting into Supabase Vector DB (documents)<br/>
+            4. Updating Knowledge Graph (nodes & edges)
+          </p>
+        </div>
+      `;
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/products/insert`, {
+      const res = await fetch(`${API_BASE}/api/products/auto-add`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error("Insert failed");
-      showToast("Product successfully embedded & stored in Supabase!");
+      
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || "Auto-add request failed");
+      }
+
+      const json = await res.json();
+      const product = json.product || {};
+      const graphUpdates = json.graph_updates || { nodes_created: 0, edges_created: 0 };
+
+      showToast("✨ Product auto-enriched, embedded, & added to Knowledge Graph!");
       form.reset();
+
+      if (resultBox) {
+        resultBox.innerHTML = `
+          <div class="ingest-success-card">
+            <div class="ingest-success-header">
+              <span class="pill-tag green">✓ Ingestion & Graph Update Complete</span>
+              <span class="pill-tag gray">ID: #${json.document_id || 'new'}</span>
+            </div>
+            <h4 class="ingest-success-title">${escapeHtml(product.title || partName)}</h4>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              ${escapeHtml(product.summary || 'Specification profile created.')}
+            </p>
+            <div class="ingest-stats-row">
+              <div class="ingest-stat-pill">
+                <div class="ingest-stat-val">384</div>
+                <div class="ingest-stat-label">Vector Dims</div>
+              </div>
+              <div class="ingest-stat-pill">
+                <div class="ingest-stat-val">${graphUpdates.nodes_created}</div>
+                <div class="ingest-stat-label">Nodes Created</div>
+              </div>
+              <div class="ingest-stat-pill">
+                <div class="ingest-stat-val">${graphUpdates.edges_created}</div>
+                <div class="ingest-stat-label">Proposed Edges</div>
+              </div>
+            </div>
+            <div class="ingest-card-actions">
+              <button class="pill-btn active" onclick="document.getElementById('tab-catalog').click()">View in Catalog</button>
+              <button class="pill-btn" onclick="document.getElementById('tab-review').click()">Review in Queue</button>
+              <button class="pill-btn" onclick="document.getElementById('tab-graph').click()">View in Graph</button>
+            </div>
+          </div>
+        `;
+      }
+
+      // Refresh catalog, stats, review queue, and graph
       fetchCatalogData();
       fetchStats();
+      fetchReviewQueue();
+      if (typeof fetchGraphData === "function") fetchGraphData(currentGraphStatus || "approved");
+
     } catch (err) {
-      console.warn("API insert failed, adding to local session:", err);
-      allProducts.unshift({ id: Date.now(), metadata: payload, content: `${title} ${summary}` });
+      console.warn("API auto-add failed, using local session fallback:", err);
+      const fallbackTitle = `${brand ? brand + ' ' : ''}${partName}${partNum ? ' (' + partNum + ')' : ''}`;
+      const fallbackMeta = {
+        title: fallbackTitle,
+        brand: brand || "Industrial",
+        summary: `Industrial specification for ${partName}.`,
+        enriched_description: notes || `${fallbackTitle} high-durability specification.`,
+        key_features: ["Industrial grade standard", "Precision tolerance"],
+        category_hierarchy: ["Industrial", "Hardware"],
+        technical_specifications: { "Part Number": partNum || "N/A", "Brand": brand || "Industrial" },
+        attributes: { "part_number": partNum || "N/A", "brand": brand || "Industrial" },
+        search_keywords: [partName, brand, partNum].filter(Boolean),
+      };
+
+      allProducts.unshift({ id: Date.now(), metadata: fallbackMeta, content: `${fallbackTitle} ${notes}` });
       renderCatalog();
-      showToast("Product added to session catalog!");
+      showToast("Product added to local session!");
       form.reset();
+
+      if (resultBox) {
+        resultBox.innerHTML = `
+          <div class="ingest-success-card">
+            <span class="pill-tag blue">Added to Local Session</span>
+            <h4 class="ingest-success-title">${escapeHtml(fallbackTitle)}</h4>
+            <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.25rem;">
+              Enriched locally and indexed in session catalog.
+            </p>
+          </div>
+        `;
+      }
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = `<span>Embed & Save to Supabase</span>`;
+      submitBtn.innerHTML = `
+        <span>Auto-Enrich & Ingest Product</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </svg>
+      `;
     }
   });
 }

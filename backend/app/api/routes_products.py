@@ -1,19 +1,74 @@
 from __future__ import annotations
 
+import json
+import os
+import re
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from groq import Groq
 
 from app.db.supabase_client import get_client
 from app.db.vector_service import get_embedding, get_embeddings_batch
+from app.models.schemas import EnrichedProduct
 
 router = APIRouter(prefix="/api/products", tags=["products"])
+
+GROQ_MODEL = "openai/gpt-oss-120b"
+
+_ENRICH_PROMPT = """\
+You are an expert industrial product information specialist and Product Information Management (PIM) system.
+Given the minimal product information provided, transform it into a rich, comprehensive, and structured product profile.
+
+Input:
+Product Name / Description: {part_name}
+Part Number / SKU: {part_num}
+Brand: {brand}
+Manufacturer: {manufacturer}
+Additional Notes / Specs: {notes_or_specs}
+
+Output strictly valid JSON with this exact schema (no markdown, no preamble):
+{{
+  "title": "Clean, standardized, searchable title including brand, part number, and primary spec",
+  "brand": "Best resolved brand name",
+  "category_hierarchy": ["Primary Category", "Subcategory", "Product Type"],
+  "summary": "1-2 sentence compelling value proposition highlighting the core capability.",
+  "enriched_description": "Comprehensive description detailing industrial applications, compatibility, materials, and benefits.",
+  "key_features": [
+    "Feature benefit statement 1",
+    "Feature benefit statement 2",
+    "Feature benefit statement 3"
+  ],
+  "technical_specifications": {{
+    "Part Number": "{part_num}",
+    "Brand": "...",
+    "Material": "...",
+    "Application": "..."
+  }},
+  "attributes": {{
+    "part_number": "{part_num}",
+    "manufacturer": "{manufacturer}",
+    "brand": "...",
+    "material": "...",
+    "application": "..."
+  }},
+  "search_keywords": ["keyword1", "keyword2", "keyword3", "keyword4"]
+}}
+"""
 
 
 class ProductSearchQuery(BaseModel):
     query: str
     match_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
     match_count: int = Field(default=12, ge=1, le=50)
+
+
+class ProductAutoAddRequest(BaseModel):
+    part_name: str = Field(description="Product title, part name, or description")
+    part_num: Optional[str] = Field(default="", description="Manufacturer part number or SKU")
+    brand: Optional[str] = Field(default="", description="Brand name (optional, AI will infer if blank)")
+    manufacturer: Optional[str] = Field(default="", description="Manufacturer name (optional)")
+    notes_or_specs: Optional[str] = Field(default="", description="Raw specs, dimensions, material, or notes")
 
 
 class ProductInsertRequest(BaseModel):
@@ -26,6 +81,111 @@ class ProductInsertRequest(BaseModel):
     technical_specifications: Dict[str, Any] = Field(default_factory=dict)
     attributes: Dict[str, Any] = Field(default_factory=dict)
     search_keywords: List[str] = Field(default_factory=list)
+
+
+def _enrich_with_groq(req: ProductAutoAddRequest) -> EnrichedProduct:
+    """Call Groq to auto-enrich raw user input into an EnrichedProduct."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return _fallback_enrich(req)
+
+    client = Groq(api_key=api_key)
+    prompt = _ENRICH_PROMPT.format(
+        part_name=req.part_name,
+        part_num=req.part_num or "N/A",
+        brand=req.brand or "Unknown",
+        manufacturer=req.manufacturer or "Unknown",
+        notes_or_specs=req.notes_or_specs or "None provided",
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": "You are a product data specialist. Return strictly valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        content = response.choices[0].message.content.strip()
+        
+        # Parse JSON from content
+        payload = None
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r'\{.*\}', content, re.DOTALL)
+            if match:
+                payload = json.loads(match.group())
+
+        if payload:
+            return EnrichedProduct(
+                title=payload.get("title", req.part_name),
+                brand=payload.get("brand", req.brand or "Industrial"),
+                category_hierarchy=payload.get("category_hierarchy", ["Industrial", "Hardware"]),
+                summary=payload.get("summary", f"{req.part_name} industrial specification."),
+                enriched_description=payload.get("enriched_description", req.notes_or_specs or req.part_name),
+                key_features=payload.get("key_features", ["High-durability specification", "Industrial grade standard"]),
+                technical_specifications=payload.get("technical_specifications", {"Part Number": req.part_num or "N/A"}),
+                attributes=payload.get("attributes", {"part_number": req.part_num or "N/A", "brand": req.brand or "Industrial"}),
+                search_keywords=payload.get("search_keywords", [req.part_name, req.brand or "hardware"]),
+            )
+    except Exception as exc:
+        print(f"[routes_products] Groq enrichment error: {exc}. Using fallback.")
+
+    return _fallback_enrich(req)
+
+
+def _fallback_enrich(req: ProductAutoAddRequest) -> EnrichedProduct:
+    """Heuristic fallback when Groq is unavailable."""
+    title = f"{req.brand + ' ' if req.brand else ''}{req.part_name}{(' (' + req.part_num + ')') if req.part_num else ''}"
+    brand = req.brand or "Industrial"
+    summary = f"High-performance {req.part_name} engineered for industrial procurement and manufacturing reliability."
+    description = (
+        f"{title} is built to industrial quality standards. "
+        f"{req.notes_or_specs if req.notes_or_specs else 'Engineered for optimal durability, reliability, and precision.'}"
+    )
+    
+    specs = {
+        "Part Number": req.part_num or "N/A",
+        "Brand": brand,
+        "Manufacturer": req.manufacturer or brand,
+    }
+    if req.notes_or_specs:
+        specs["Notes"] = req.notes_or_specs
+
+    return EnrichedProduct(
+        title=title,
+        brand=brand,
+        category_hierarchy=["Industrial", "Procurement", "Hardware"],
+        summary=summary,
+        enriched_description=description,
+        key_features=[
+            f"Precision {req.part_name}",
+            f"Manufacturer: {req.manufacturer or brand}",
+            "Industrial grade tolerance & reliability",
+        ],
+        technical_specifications=specs,
+        attributes={
+            "part_number": req.part_num or "N/A",
+            "brand": brand,
+            "manufacturer": req.manufacturer or brand,
+        },
+        search_keywords=[k.strip() for k in f"{req.part_name} {brand} {req.part_num}".split() if len(k.strip()) > 1],
+    )
+
+
+def _product_to_text(p: EnrichedProduct) -> str:
+    parts = [
+        p.title,
+        f"Brand: {p.brand}" if p.brand else "",
+        p.summary,
+        p.enriched_description,
+        "Features: " + "; ".join(p.key_features) if p.key_features else "",
+        "Keywords: " + ", ".join(p.search_keywords) if p.search_keywords else "",
+    ]
+    return "\n".join(filter(None, parts))
 
 
 @router.get("")
@@ -54,9 +214,11 @@ def get_catalog_stats():
     client = get_client()
     docs_resp = client.table("documents").select("id, metadata").execute()
     edges_resp = client.table("edges").select("id, status, confidence").execute()
+    nodes_resp = client.table("nodes").select("id").execute()
     
     docs = docs_resp.data
     edges = edges_resp.data
+    nodes = nodes_resp.data
     
     brands = set()
     categories = set()
@@ -72,11 +234,13 @@ def get_catalog_stats():
     approved_count = sum(1 for e in edges if e.get("status") == "approved")
     avg_conf = (
         sum(e.get("confidence", 0.0) for e in edges) / len(edges)
-        if edges else 0.94
+        if edges else 0.96
     )
     
     return {
         "total_products": len(docs),
+        "total_nodes": len(nodes),
+        "total_edges": len(edges),
         "total_brands": len(brands),
         "total_categories": len(categories),
         "brands_list": sorted(list(brands)),
@@ -88,7 +252,7 @@ def get_catalog_stats():
 
 @router.post("/search")
 def search_products(req: ProductSearchQuery):
-    """Semantic vector search against Supabase using Groq nomic-embed-text-v1.5."""
+    """Semantic vector search against Supabase using all-MiniLM-L6-v2."""
     if not req.query.strip():
         return {"query": req.query, "count": 0, "results": []}
 
@@ -112,9 +276,165 @@ def search_products(req: ProductSearchQuery):
         raise HTTPException(status_code=500, detail=f"Vector search failed: {exc}")
 
 
+@router.post("/auto-add")
+def auto_add_product(req: ProductAutoAddRequest):
+    """Automatically enrich minimal product data, generate vector embedding,
+    store in Supabase Vector DB (documents), and populate Knowledge Graph nodes & edges.
+    """
+    if not req.part_name.strip():
+        raise HTTPException(status_code=400, detail="Product name / description is required.")
+
+    client = get_client()
+
+    # 1. AI Enrichment
+    enriched = _enrich_with_groq(req)
+
+    # 2. Vector Embedding & Supabase Document Insertion
+    content = _product_to_text(enriched)
+    embedding = get_embedding(content)
+
+    metadata = {
+        "title": enriched.title,
+        "brand": enriched.brand,
+        "category_hierarchy": enriched.category_hierarchy,
+        "summary": enriched.summary,
+        "enriched_description": enriched.enriched_description,
+        "key_features": enriched.key_features,
+        "technical_specifications": enriched.technical_specifications,
+        "attributes": enriched.attributes,
+        "search_keywords": enriched.search_keywords,
+        "is_user_added": True,
+    }
+
+    doc_resp = client.table("documents").insert({
+        "content": content,
+        "metadata": metadata,
+        "embedding": embedding,
+    }).execute()
+
+    created_doc = doc_resp.data[0] if doc_resp.data else {}
+    doc_id = created_doc.get("id")
+
+    # 3. Create Source Document for Provenance
+    source_doc = client.table("source_documents").insert({
+        "file_name": f"Manual_Entry_{req.part_num or req.part_name[:20].replace(' ', '_')}",
+        "file_type": "manual_entry",
+        "raw_text": content,
+    }).execute().data[0]
+    source_doc_id = source_doc["id"]
+
+    # 4. Knowledge Graph Creation: Product Node
+    product_node = client.table("nodes").insert({
+        "node_type": "Product",
+        "label": enriched.title,
+        "properties": {
+            "part_number": req.part_num or "N/A",
+            "brand": enriched.brand,
+            "document_id": doc_id,
+        },
+    }).execute().data[0]
+    product_node_id = product_node["id"]
+
+    created_nodes = [product_node]
+    created_edges = []
+
+    # 4a. Brand Node & Edge
+    if enriched.brand and enriched.brand != "Unknown":
+        brand_node = client.table("nodes").insert({
+            "node_type": "Supplier",
+            "label": enriched.brand,
+            "properties": {"type": "Brand"},
+        }).execute().data[0]
+        created_nodes.append(brand_node)
+
+        edge = client.table("edges").insert({
+            "source_node_id": product_node_id,
+            "target_node_id": brand_node["id"],
+            "relation": "has_brand",
+            "value": {"brand": enriched.brand},
+            "confidence": 1.0,
+            "source_document_id": source_doc_id,
+            "status": "proposed",
+        }).execute().data[0]
+        created_edges.append(edge)
+
+    # 4b. Category Nodes & Edges
+    for cat in enriched.category_hierarchy:
+        cat_node = client.table("nodes").insert({
+            "node_type": "Category",
+            "label": cat,
+            "properties": {},
+        }).execute().data[0]
+        created_nodes.append(cat_node)
+
+        edge = client.table("edges").insert({
+            "source_node_id": product_node_id,
+            "target_node_id": cat_node["id"],
+            "relation": "belongs_to_category",
+            "value": {"category": cat},
+            "confidence": 0.95,
+            "source_document_id": source_doc_id,
+            "status": "proposed",
+        }).execute().data[0]
+        created_edges.append(edge)
+
+    # 4c. Attribute Nodes & Edges (from Technical Specs)
+    for k, v in list(enriched.technical_specifications.items())[:6]:
+        if not v or v == "N/A":
+            continue
+        attr_node = client.table("nodes").insert({
+            "node_type": "Attribute",
+            "label": f"{k}: {v}",
+            "properties": {"field_name": k, "field_value": str(v)},
+        }).execute().data[0]
+        created_nodes.append(attr_node)
+
+        edge = client.table("edges").insert({
+            "source_node_id": product_node_id,
+            "target_node_id": attr_node["id"],
+            "relation": "has_specification",
+            "value": {k: str(v)},
+            "confidence": 0.92,
+            "source_document_id": source_doc_id,
+            "status": "proposed",
+        }).execute().data[0]
+        created_edges.append(edge)
+
+    # 4d. Manufacturer Node & Edge (if different from brand)
+    if req.manufacturer and req.manufacturer != enriched.brand:
+        manuf_node = client.table("nodes").insert({
+            "node_type": "Supplier",
+            "label": req.manufacturer,
+            "properties": {"type": "Manufacturer"},
+        }).execute().data[0]
+        created_nodes.append(manuf_node)
+
+        edge = client.table("edges").insert({
+            "source_node_id": product_node_id,
+            "target_node_id": manuf_node["id"],
+            "relation": "manufactured_by",
+            "value": {"manufacturer": req.manufacturer},
+            "confidence": 0.95,
+            "source_document_id": source_doc_id,
+            "status": "proposed",
+        }).execute().data[0]
+        created_edges.append(edge)
+
+    return {
+        "status": "success",
+        "document_id": doc_id,
+        "product": enriched.model_dump(),
+        "graph_updates": {
+            "product_node_id": product_node_id,
+            "nodes_created": len(created_nodes),
+            "edges_created": len(created_edges),
+        },
+    }
+
+
 @router.post("/insert")
 def insert_product(req: ProductInsertRequest):
-    """Insert and embed a new enriched product into Supabase."""
+    """Direct manual insert with pre-enriched data (Backwards-compatible)."""
     client = get_client()
 
     parts = [

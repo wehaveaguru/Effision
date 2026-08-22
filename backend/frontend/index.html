@@ -340,96 +340,98 @@
       <div class="ingest-grid">
         <div class="ingest-card">
           <div class="card-title-group">
-            <span class="studio-badge">Direct PIM Creator</span>
-            <h2 class="card-title">Add & Auto-Enrich Product</h2>
-            <p class="hero-subtext">Directly create a product entry. The backend will generate dense 384-dim embeddings
-              and store in Supabase.</p>
+            <span class="studio-badge">Autonomous Product Brain</span>
+            <h2 class="card-title">Quick Add & Auto-Enrich</h2>
+            <p class="hero-subtext">Enter only the raw product details. The backend AI automatically enriches
+              specifications, generates 384-dim vector embeddings, and creates Knowledge Graph nodes & edges.</p>
           </div>
 
           <form id="form-add-product" class="apple-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Product Title / Name *</label>
-                <input type="text" id="inp-title" required
-                  placeholder="e.g. Diablo DCB518ASTS06G 1/2&quot;x18&quot; Sanding Belt" />
-              </div>
-              <div class="form-group">
-                <label>Brand *</label>
-                <input type="text" id="inp-brand" required placeholder="e.g. Diablo / Freud / 3M" />
-              </div>
-            </div>
-
             <div class="form-group">
-              <label>1-2 Sentence Value Hook (Summary) *</label>
-              <textarea id="inp-summary" rows="2" required
-                placeholder="Punchy core value proposition and key applications..."></textarea>
-            </div>
-
-            <div class="form-group">
-              <label>Comprehensive Technical Description *</label>
-              <textarea id="inp-description" rows="3" required
-                placeholder="Full technical overview, use cases, compatibility, material composition..."></textarea>
+              <label>Product Name / Part Description *</label>
+              <input type="text" id="inp-part-name" required
+                placeholder="e.g. Diablo 1/2&quot;x18&quot; Sanding Belt 6pc or Bosch 18V Brushless Drill" />
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label>Key Features (comma separated)</label>
-                <input type="text" id="inp-features"
-                  placeholder="1/2&quot; Width, 18&quot; Length, Pack of 6, Durable Abrasive" />
+                <label>Manufacturer Part Number / SKU (Optional)</label>
+                <input type="text" id="inp-part-num" placeholder="e.g. DCB518ASTS06G" />
               </div>
               <div class="form-group">
-                <label>Category Hierarchy (comma separated)</label>
-                <input type="text" id="inp-categories" placeholder="Abrasives, Sanding Belts, Industrial" />
+                <label>Brand / Manufacturer (Optional)</label>
+                <input type="text" id="inp-brand" placeholder="e.g. Diablo, 3M, Freud (AI infers if blank)" />
               </div>
             </div>
 
             <div class="form-group">
-              <label>Search Keywords (comma separated)</label>
-              <input type="text" id="inp-keywords" placeholder="diablo, sanding belt, abrasive, wood, metal" />
+              <label>Raw Specifications / Notes / Packaging (Optional)</label>
+              <textarea id="inp-notes" rows="3"
+                placeholder="e.g. Pack of 6 belts, 1/2 x 18 inch, heavy-duty cloth backing, wood and steel grinding"></textarea>
+            </div>
+
+            <!-- Auto-Pipeline Badges -->
+            <div class="auto-pipeline-badges">
+              <div class="pipeline-badge"><span class="badge-icon">🧠</span> Auto-Enrichment</div>
+              <div class="pipeline-badge"><span class="badge-icon">⚡</span> 384-dim Vector DB</div>
+              <div class="pipeline-badge"><span class="badge-icon">🕸️</span> Nodes & Edges Graph</div>
             </div>
 
             <button type="submit" class="btn-primary-glow" id="btn-submit-product">
-              <span>Embed & Save to Supabase</span>
+              <span>Auto-Enrich & Ingest Product</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12" />
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
               </svg>
             </button>
           </form>
+
+          <!-- Dynamic Result Box -->
+          <div id="add-product-result" style="display: none; margin-top: 1.5rem;"></div>
         </div>
 
         <div class="ingest-card">
           <div class="card-title-group">
-            <span class="studio-badge">Batch File Processing</span>
-            <h2 class="card-title">Automated Pipeline</h2>
-            <p class="hero-subtext">Commands to run batch ingestion for full catalogs.</p>
+            <span class="studio-badge">Autonomous Pipeline</span>
+            <h2 class="card-title">How It Works</h2>
+            <p class="hero-subtext">Zero manual data entry or scripts required. Everything executes automatically in the
+              background.</p>
           </div>
 
           <div class="pipeline-instruction-box">
-            <div class="cmd-snippet">
-              <div class="snippet-header">
-                <span>Ingest Unihack Procurement CSV (1,000 items)</span>
-                <button class="btn-copy"
-                  onclick="copySnippet('python -X utf8 scripts/ingest_unihack_csv.py')">Copy</button>
+            <div class="ingest-feature-item">
+              <div class="feature-step-num">1</div>
+              <div class="feature-step-content">
+                <strong>Instant AI Normalization & Enrichment</strong>
+                <p>Groq LLM extracts clean titles, value propositions, technical specifications, and key features
+                  directly from raw input.</p>
               </div>
-              <code>python -X utf8 scripts/ingest_unihack_csv.py</code>
             </div>
 
-            <div class="cmd-snippet">
-              <div class="snippet-header">
-                <span>Ingest Specific Custom CSV</span>
-                <button class="btn-copy"
-                  onclick="copySnippet('python -X utf8 scripts/ingest_unihack_csv.py --csv path/to/file.csv')">Copy</button>
+            <div class="ingest-feature-item">
+              <div class="feature-step-num">2</div>
+              <div class="feature-step-content">
+                <strong>Dense Vector Embeddings (384-Dim)</strong>
+                <p>Calculates 384-dimensional vector embeddings and indexes them in Supabase pgvector with HNSW cosine
+                  similarity.</p>
               </div>
-              <code>python -X utf8 scripts/ingest_unihack_csv.py --csv path/to/file.csv</code>
             </div>
 
-            <div class="cmd-snippet">
-              <div class="snippet-header">
-                <span>Ingest PDF / Spec Sheet through LlamaParse</span>
-                <button class="btn-copy"
-                  onclick="copySnippet('python scripts/run_pipeline.py Annual_Procurement_Report.pdf')">Copy</button>
+            <div class="ingest-feature-item">
+              <div class="feature-step-num">3</div>
+              <div class="feature-step-content">
+                <strong>Knowledge Graph Nodes & Edges</strong>
+                <p>Creates Product, Brand, Category, Attribute, and Supplier graph nodes with provenance-tracked
+                  relation edges.</p>
               </div>
-              <code>python scripts/run_pipeline.py Annual_Procurement_Report.pdf</code>
+            </div>
+
+            <div class="ingest-feature-item">
+              <div class="feature-step-num">4</div>
+              <div class="feature-step-content">
+                <strong>Human-in-the-Loop Governance</strong>
+                <p>Newly proposed specs immediately sync to the Review Queue for validation by product managers.</p>
+              </div>
             </div>
           </div>
         </div>
