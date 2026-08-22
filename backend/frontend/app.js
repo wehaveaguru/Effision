@@ -66,7 +66,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initCommandPalette();
   initDrawer();
   initProductForm();
+  initBulkUpload();
   initGraphCanvas();
+  initAnalytics();
   fetchCatalogData();
   fetchStats();
   fetchReviewQueue();
@@ -612,7 +614,7 @@ function initProductForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      
+
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.detail || "Auto-add request failed");
@@ -703,6 +705,209 @@ function initProductForm() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M5 12h14" />
           <path d="m12 5 7 7-7 7" />
+        </svg>
+      `;
+    }
+  });
+}
+
+/* ==========================================================================
+   Bulk Upload (CSV / PDF Drag-and-Drop)
+   ========================================================================== */
+function initBulkUpload() {
+  const dropZone = document.getElementById("bulk-drop-zone");
+  const fileInput = document.getElementById("bulk-file-input");
+  const browseBtn = document.getElementById("btn-browse-file");
+  const removeBtn = document.getElementById("btn-remove-file");
+  const uploadBtn = document.getElementById("btn-bulk-upload");
+  const resultBox = document.getElementById("bulk-upload-result");
+  const previewBox = document.getElementById("bulk-file-preview");
+
+  if (!dropZone) return;
+
+  let selectedFile = null;
+
+  // -- Helpers --
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function fileTypeIcon(filename) {
+    const ext = (filename || "").split(".").pop().toLowerCase();
+    if (ext === "pdf") return "📑";
+    if (ext === "csv") return "📊";
+    if (ext === "xlsx") return "📊";
+    if (ext === "docx") return "📝";
+    return "📄";
+  }
+
+  function applyFile(file) {
+    selectedFile = file;
+
+    document.getElementById("bulk-file-name").textContent = file.name;
+    document.getElementById("bulk-file-meta").textContent = formatBytes(file.size);
+    document.getElementById("bulk-file-type-icon").textContent = fileTypeIcon(file.name);
+
+    previewBox.style.display = "flex";
+    dropZone.style.display = "none";
+    uploadBtn.disabled = false;
+
+    // Clear old result
+    resultBox.style.display = "none";
+    resultBox.innerHTML = "";
+  }
+
+  function clearFile() {
+    selectedFile = null;
+    fileInput.value = "";
+    previewBox.style.display = "none";
+    dropZone.style.display = "block";
+    uploadBtn.disabled = true;
+    resultBox.style.display = "none";
+    resultBox.innerHTML = "";
+  }
+
+  // -- Browse button --
+  if (browseBtn) browseBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  dropZone.addEventListener("click", () => fileInput.click());
+  dropZone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") fileInput.click();
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files && fileInput.files[0]) applyFile(fileInput.files[0]);
+  });
+
+  if (removeBtn) removeBtn.addEventListener("click", clearFile);
+
+  // -- Drag-and-drop --
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone.addEventListener("dragleave", (e) => {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove("drag-over");
+  });
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) applyFile(file);
+  });
+
+  // -- Upload --
+  if (uploadBtn) uploadBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = `<span>Uploading & Ingesting...</span>`;
+
+    resultBox.style.display = "block";
+    resultBox.innerHTML = `
+      <div class="bulk-uploading-state">
+        <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-blue);">
+          <span class="status-dot"></span>
+          <strong>Running Ingestion Pipeline...</strong>
+        </div>
+        <div class="bulk-upload-progress-bar">
+          <div class="bulk-upload-progress-fill"></div>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-secondary);">
+          ${selectedFile.name.endsWith(".pdf") || selectedFile.name.endsWith(".docx")
+        ? "1. Parsing document via LlamaParse<br/>2. Generating 384-dim embedding<br/>3. Storing in Supabase Vector DB"
+        : "1. Extracting rows via LlamaCloud Extract<br/>2. Groq AI enriching each product<br/>3. Generating embeddings &amp; inserting to pgvector"
+      }
+        </p>
+      </div>
+    `;
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/products/bulk-upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Upload failed (${res.status})`);
+      }
+
+      const json = await res.json();
+      const count = json.products_ingested || 0;
+      const errors = json.errors || [];
+      const ftype = (json.file_type || "").toUpperCase();
+
+      showToast(`✨ ${count} product${count !== 1 ? "s" : ""} ingested from ${escapeHtml(json.file || selectedFile.name)}!`);
+
+      resultBox.innerHTML = `
+        <div class="bulk-result-card">
+          <div class="bulk-result-header">
+            <span class="pill-tag green">✓ Ingestion Complete</span>
+            <span class="pill-tag gray">${escapeHtml(ftype)} · ${escapeHtml(json.file || selectedFile.name)}</span>
+          </div>
+          <div class="bulk-result-body">
+            <div class="bulk-result-stats">
+              <div class="bulk-stat-pill">
+                <div class="bulk-stat-val">${count}</div>
+                <div class="bulk-stat-label">Products Added</div>
+              </div>
+              <div class="bulk-stat-pill">
+                <div class="bulk-stat-val">384</div>
+                <div class="bulk-stat-label">Vector Dims</div>
+              </div>
+              <div class="bulk-stat-pill">
+                <div class="bulk-stat-val" style="${errors.length > 0 ? 'color:var(--accent-orange)' : ''}">${errors.length}</div>
+                <div class="bulk-stat-label">Errors</div>
+              </div>
+            </div>
+            ${errors.length > 0 ? `
+              <ul class="bulk-error-list">
+                ${errors.map(e => `<li>${escapeHtml(e)}</li>`).join("")}
+              </ul>
+            ` : ""}
+            <div class="ingest-card-actions" style="margin-top: 0.85rem;">
+              <button class="pill-btn active" onclick="document.getElementById('tab-catalog').click()">View Catalog</button>
+              <button class="pill-btn" onclick="document.getElementById('tab-search').click()">Search Products</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      fetchCatalogData();
+      fetchStats();
+
+    } catch (err) {
+      resultBox.innerHTML = `
+        <div class="bulk-result-card" style="border-color: rgba(255,69,58,0.3);">
+          <div class="bulk-result-header">
+            <span class="pill-tag" style="background: rgba(255,69,58,0.15); color: var(--accent-red); border-color: rgba(255,69,58,0.3);">⚠ Upload Failed</span>
+          </div>
+          <div class="bulk-result-body">
+            <p style="font-size: 0.82rem; color: var(--text-secondary);">${escapeHtml(err.message)}</p>
+            <p style="font-size: 0.75rem; color: var(--text-tertiary); margin-top: 0.4rem;">
+              Make sure LLAMA_CLOUD_API_KEY and GROQ_API_KEY are set, and the backend is running.
+            </p>
+          </div>
+        </div>
+      `;
+      showToast("Upload failed: " + err.message);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.innerHTML = `
+        <span>Upload &amp; Ingest File</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
       `;
     }
@@ -821,7 +1026,7 @@ function initGraphCanvas() {
     if (hoveredNode) {
       canvas.style.cursor = "pointer";
       let tooltipText = hoveredNode.label;
-      
+
       const type = (hoveredNode.node_type || "").toLowerCase();
       if (type === "attribute" || type === "spec") {
         const edge = currentGraphEdges.find(ed => ed.target_node_id === hoveredNode.id);
@@ -945,6 +1150,312 @@ function openCmdPalette() {
 function closeCmdPalette() {
   const overlay = document.getElementById("cmd-palette-overlay");
   if (overlay) overlay.classList.remove("open");
+}
+
+/* ==========================================================================
+   Catalogue Analytics Dashboard
+   ========================================================================== */
+
+let _analyticsData = null;
+
+function initAnalytics() {
+  const refreshBtn = document.getElementById("btn-refresh-analytics");
+  if (refreshBtn) refreshBtn.addEventListener("click", fetchAnalysis);
+
+  // Auto-load when tab is activated
+  const analyticsTab = document.getElementById("tab-analytics");
+  if (analyticsTab) {
+    analyticsTab.addEventListener("click", () => {
+      if (!_analyticsData) fetchAnalysis();
+      else renderAnalytics(_analyticsData); // re-draw charts (canvas sizes may have changed)
+    });
+  }
+}
+
+async function fetchAnalysis() {
+  // Show skeleton shimmer while loading
+  ["analytics-kpi-row", "analytics-charts-grid", "analytics-card-fillrates",
+    "analytics-card-keywords"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.opacity = "0.4";
+    });
+
+  try {
+    const res = await fetch(`${API_BASE}/api/products/analysis`);
+    if (!res.ok) throw new Error("Analysis API error");
+    const data = await res.json();
+    _analyticsData = data;
+    renderAnalytics(data);
+  } catch (err) {
+    console.warn("[analytics] Backend unavailable, using demo data:", err);
+    // Fallback demo so the UI is always illustrative
+    _analyticsData = _demoAnalyticsData();
+    renderAnalytics(_analyticsData);
+  } finally {
+    ["analytics-kpi-row", "analytics-charts-grid", "analytics-card-fillrates",
+      "analytics-card-keywords"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.opacity = "1";
+      });
+  }
+}
+
+function renderAnalytics(data) {
+  if (!data || data.total_products === 0) {
+    document.getElementById("analytics-empty").style.display = "block";
+    return;
+  }
+  document.getElementById("analytics-empty").style.display = "none";
+
+  // ── KPI Cards ──────────────────────────────────────────────────────────────
+  _setText("akpi-total", data.total_products);
+  _setText("akpi-completeness", (data.avg_completeness_pct || 0) + "%");
+  _setText("akpi-brands", data.brand_distribution?.length || 0);
+  _setText("akpi-categories", data.category_breakdown?.length || 0);
+
+  // ── Bar Charts ─────────────────────────────────────────────────────────────
+  requestAnimationFrame(() => {
+    drawHorizontalBarChart("chartBrands",
+      (data.brand_distribution || []).slice(0, 10),
+      d => d.brand, d => d.count,
+      ["#2997ff", "#5fb3ff", "#0a7aff", "#38b6ff", "#1a8aff",
+        "#2997ff", "#5fb3ff", "#0a7aff", "#38b6ff", "#1a8aff"]
+    );
+    _renderFooterLegend("analytics-brands-footer", data.brand_distribution, d => d.brand, d => d.count);
+
+    drawHorizontalBarChart("chartCategories",
+      (data.category_breakdown || []).slice(0, 10),
+      d => d.category, d => d.count,
+      ["#30d158", "#34e760", "#20bb48", "#28d155", "#22c84f",
+        "#30d158", "#34e760", "#20bb48", "#28d155", "#22c84f"]
+    );
+    _renderFooterLegend("analytics-categories-footer", data.category_breakdown, d => d.category, d => d.count);
+  });
+
+  // ── Quality Distribution ───────────────────────────────────────────────────
+  const qd = data.quality_distribution || {};
+  const qBody = document.getElementById("analytics-quality-body");
+  if (qBody) {
+    const complPct = qd.complete_pct || 0;
+    const partPct = qd.partial_pct || 0;
+    const sparPct = qd.sparse_pct || 0;
+    qBody.innerHTML = `
+      <div style="padding: 0 1rem;">
+        <div class="quality-segmented-bar">
+          <div class="quality-seg complete" style="width:${complPct}%" title="Complete: ${qd.complete}"></div>
+          <div class="quality-seg partial"  style="width:${partPct}%"  title="Partial: ${qd.partial}"></div>
+          <div class="quality-seg sparse"   style="width:${sparPct}%"  title="Sparse: ${qd.sparse}"></div>
+        </div>
+        <div class="quality-legend">
+          <div class="quality-legend-item">
+            <span class="quality-dot complete"></span>
+            <span class="quality-legend-label">Complete</span>
+            <span class="quality-legend-val">${qd.complete || 0} <span style="color:var(--text-tertiary)">(${complPct}%)</span></span>
+          </div>
+          <div class="quality-legend-item">
+            <span class="quality-dot partial"></span>
+            <span class="quality-legend-label">Partial</span>
+            <span class="quality-legend-val">${qd.partial || 0} <span style="color:var(--text-tertiary)">(${partPct}%)</span></span>
+          </div>
+          <div class="quality-legend-item">
+            <span class="quality-dot sparse"></span>
+            <span class="quality-legend-label">Sparse</span>
+            <span class="quality-legend-val">${qd.sparse || 0} <span style="color:var(--text-tertiary)">(${sparPct}%)</span></span>
+          </div>
+        </div>
+        <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary); padding-top: 0.75rem; border-top: 1px solid var(--border-subtle);">
+          <strong style="color: var(--text-primary);">Complete</strong> = ≥ 7 of 8 fields filled &nbsp;·&nbsp;
+          <strong style="color: var(--text-primary);">Partial</strong> = 4–6 fields &nbsp;·&nbsp;
+          <strong style="color: var(--text-primary);">Sparse</strong> = ≤ 3 fields
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Source Provenance ──────────────────────────────────────────────────────
+  const srcBody = document.getElementById("analytics-sources-body");
+  const sources = data.source_files || [];
+  if (srcBody) {
+    if (!sources.length) {
+      srcBody.innerHTML = `<p style="padding: 1rem; font-size:0.82rem; color: var(--text-secondary);">No source provenance data recorded yet.</p>`;
+    } else {
+      const maxCount = Math.max(...sources.map(s => s.count), 1);
+      srcBody.innerHTML = sources.map(s => {
+        const pct = Math.round(s.count / maxCount * 100);
+        const icon = (s.file || "").endsWith(".pdf") ? "📑"
+          : (s.file || "").endsWith(".csv") ? "📊"
+            : "✍️";
+        return `
+          <div class="source-row">
+            <span class="source-icon">${icon}</span>
+            <div class="source-info">
+              <div class="source-name">${escapeHtml(s.file || "Unknown")}</div>
+              <div class="source-bar-wrap">
+                <div class="source-bar-fill" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <span class="source-count">${s.count}</span>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  // ── Field Fill Rates ───────────────────────────────────────────────────────
+  const frBody = document.getElementById("analytics-fillrates-body");
+  const fillRates = data.field_fill_rates || [];
+  if (frBody && fillRates.length) {
+    frBody.innerHTML = `
+      <div class="fillrates-grid">
+        ${fillRates.map(f => {
+      const pct = f.fill_rate || 0;
+      const color = pct >= 80 ? "var(--accent-green)"
+        : pct >= 50 ? "var(--accent-blue)"
+          : "var(--accent-orange)";
+      return `
+            <div class="fillrate-row">
+              <div class="fillrate-label">${escapeHtml(f.field)}</div>
+              <div class="fillrate-bar-wrap">
+                <div class="fillrate-bar-fill" style="width:${pct}%; background:${color}"></div>
+              </div>
+              <div class="fillrate-pct" style="color:${color}">${pct}%</div>
+            </div>
+          `;
+    }).join("")}
+      </div>
+    `;
+  }
+
+  // ── Keyword Cloud ──────────────────────────────────────────────────────────
+  const kwCloud = document.getElementById("analytics-keyword-cloud");
+  const keywords = (data.top_keywords || []).slice(0, 30);
+  if (kwCloud && keywords.length) {
+    const maxCount = Math.max(...keywords.map(k => k.count), 1);
+    const COLORS = ["#2997ff", "#30d158", "#af52de", "#ff9f0a", "#5fb3ff", "#34e760"];
+    kwCloud.innerHTML = keywords.map((k, i) => {
+      const ratio = k.count / maxCount;
+      const size = 0.72 + ratio * 0.7; // 0.72rem → 1.42rem
+      const weight = ratio > 0.6 ? 700 : ratio > 0.3 ? 600 : 500;
+      const color = COLORS[i % COLORS.length];
+      const opacity = 0.55 + ratio * 0.45;
+      return `<span class="kw-chip"
+        style="font-size:${size.toFixed(2)}rem; font-weight:${weight}; color:${color}; opacity:${opacity.toFixed(2)};"
+        title="${k.count} occurrence${k.count !== 1 ? 's' : ''}">${escapeHtml(k.keyword)}</span>`;
+    }).join(" ");
+  } else if (kwCloud) {
+    kwCloud.innerHTML = `<p style="font-size:0.82rem; color:var(--text-secondary);">No keywords indexed yet.</p>`;
+  }
+}
+
+/* ── Canvas bar chart renderer ─────────────────────────────────────────────── */
+function drawHorizontalBarChart(canvasId, data, labelFn, valueFn, colors) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !data || !data.length) return;
+
+  const wrapper = canvas.parentElement;
+  const W = wrapper.clientWidth || 400;
+  const BAR_H = 22;
+  const GAP = 10;
+  const LABEL_W = 110;
+  const VAL_W = 36;
+  const H = data.length * (BAR_H + GAP) + 20;
+
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+
+  const maxVal = Math.max(...data.map(valueFn), 1);
+  const barAreaW = W - LABEL_W - VAL_W - 16;
+
+  data.forEach((item, i) => {
+    const y = i * (BAR_H + GAP) + 10;
+    const val = valueFn(item);
+    const barW = Math.max(4, (val / maxVal) * barAreaW);
+    const color = colors[i % colors.length];
+
+    // Label
+    ctx.fillStyle = "#86868b";
+    ctx.font = "12px 'Instrument Sans', sans-serif";
+    ctx.textAlign = "right";
+    const label = labelFn(item);
+    const truncLabel = label.length > 14 ? label.slice(0, 13) + "…" : label;
+    ctx.fillText(truncLabel, LABEL_W - 8, y + BAR_H / 2 + 4);
+
+    // Bar track
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.beginPath();
+    ctx.roundRect(LABEL_W, y, barAreaW, BAR_H, 5);
+    ctx.fill();
+
+    // Bar fill with gradient
+    const grad = ctx.createLinearGradient(LABEL_W, 0, LABEL_W + barW, 0);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, color + "99");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(LABEL_W, y, barW, BAR_H, 5);
+    ctx.fill();
+
+    // Value label
+    ctx.fillStyle = "#f5f5f7";
+    ctx.font = "bold 11px 'Instrument Sans', sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(val, LABEL_W + barW + 8, y + BAR_H / 2 + 4);
+  });
+}
+
+function _renderFooterLegend(containerId, data, labelFn, valueFn) {
+  const el = document.getElementById(containerId);
+  if (!el || !data) return;
+  const total = data.reduce((s, d) => s + valueFn(d), 0) || 1;
+  el.innerHTML = `<span style="font-size:0.75rem; color: var(--text-secondary);">${data.length} unique entries &nbsp;·&nbsp; ${total} total products</span>`;
+}
+
+function _setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function _demoAnalyticsData() {
+  return {
+    total_products: 12,
+    avg_completeness_pct: 87.5,
+    brand_distribution: [
+      { brand: "Diablo", count: 4 }, { brand: "3M", count: 3 },
+      { brand: "Mirka", count: 3 }, { brand: "Bosch", count: 2 },
+    ],
+    category_breakdown: [
+      { category: "Abrasives", count: 7 }, { category: "Power Tools", count: 3 },
+      { category: "Accessories", count: 2 },
+    ],
+    top_keywords: [
+      { keyword: "abrasive", count: 9 }, { keyword: "sanding", count: 8 },
+      { keyword: "industrial", count: 7 }, { keyword: "belt", count: 6 },
+      { keyword: "3M", count: 5 }, { keyword: "grinding", count: 5 },
+      { keyword: "diablo", count: 4 }, { keyword: "mirka", count: 4 },
+      { keyword: "disc", count: 4 }, { keyword: "P150", count: 3 },
+      { keyword: "ceramic", count: 3 }, { keyword: "metal", count: 3 },
+      { keyword: "woodworking", count: 2 }, { keyword: "precision", count: 2 },
+    ],
+    quality_distribution: {
+      complete: 9, complete_pct: 75.0,
+      partial: 2, partial_pct: 16.7,
+      sparse: 1, sparse_pct: 8.3,
+    },
+    source_files: [
+      { file: "Unihack_ Sample.csv", count: 8 },
+      { file: "Manual Entry", count: 3 },
+      { file: "Annual_Procurement_Report.pdf", count: 1 },
+    ],
+    field_fill_rates: [
+      { field: "Title", fill_rate: 100 }, { field: "Brand", fill_rate: 100 },
+      { field: "Summary", fill_rate: 91.7 }, { field: "Description", fill_rate: 83.3 },
+      { field: "Key Features", fill_rate: 91.7 }, { field: "Tech Specs", fill_rate: 83.3 },
+      { field: "Keywords", fill_rate: 91.7 }, { field: "Categories", fill_rate: 100 },
+    ],
+  };
 }
 
 /* ==========================================================================

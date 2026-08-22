@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from groq import Groq
 
@@ -250,6 +253,145 @@ def get_catalog_stats():
     }
 
 
+@router.get("/analysis")
+def get_catalog_analysis():
+    """Deep catalogue analytics: brand distribution, category breakdown,
+    top keywords, data completeness scores, and data quality overview.
+    """
+    from collections import Counter
+
+    client = get_client()
+    docs_resp = client.table("documents").select("id, content, metadata").execute()
+    docs = docs_resp.data or []
+
+    # ── Brand distribution ──────────────────────────────────────────────────
+    brand_counter: Counter = Counter()
+    category_counter: Counter = Counter()
+    keyword_counter: Counter = Counter()
+
+    completeness_scores: list[float] = []
+    quality_buckets = {"complete": 0, "partial": 0, "sparse": 0}
+    source_counter: Counter = Counter()
+
+    COMPLETENESS_FIELDS = [
+        "title", "brand", "summary", "enriched_description",
+        "key_features", "technical_specifications", "search_keywords",
+        "category_hierarchy",
+    ]
+
+    for doc in docs:
+        meta = doc.get("metadata") or {}
+        if not isinstance(meta, dict):
+            meta = {}
+
+        # Brand
+        brand = meta.get("brand") or ""
+        if brand:
+            brand_counter[brand] += 1
+
+        # Categories (de-dup per product — only count top-level category)
+        cats = meta.get("category_hierarchy") or []
+        if cats and isinstance(cats, list):
+            category_counter[cats[0]] += 1
+
+        # Keywords
+        kws = meta.get("search_keywords") or []
+        if isinstance(kws, list):
+            for kw in kws:
+                if kw and isinstance(kw, str) and len(kw) > 2:
+                    keyword_counter[kw.lower().strip()] += 1
+
+        # Completeness score
+        filled = 0
+        for field in COMPLETENESS_FIELDS:
+            val = meta.get(field)
+            if val and (not isinstance(val, (list, dict)) or len(val) > 0):
+                filled += 1
+        score = filled / len(COMPLETENESS_FIELDS)
+        completeness_scores.append(score)
+
+        if score >= 0.85:
+            quality_buckets["complete"] += 1
+        elif score >= 0.5:
+            quality_buckets["partial"] += 1
+        else:
+            quality_buckets["sparse"] += 1
+
+        # Source file provenance
+        src = meta.get("source_file") or meta.get("file_name") or "Manual Entry"
+        source_counter[src] += 1
+
+    total = len(docs) or 1
+    avg_completeness = (
+        round(sum(completeness_scores) / len(completeness_scores) * 100, 1)
+        if completeness_scores else 0.0
+    )
+
+    return {
+        "total_products": len(docs),
+        "avg_completeness_pct": avg_completeness,
+        "brand_distribution": [
+            {"brand": b, "count": c}
+            for b, c in brand_counter.most_common(15)
+        ],
+        "category_breakdown": [
+            {"category": cat, "count": cnt}
+            for cat, cnt in category_counter.most_common(12)
+        ],
+        "top_keywords": [
+            {"keyword": kw, "count": cnt}
+            for kw, cnt in keyword_counter.most_common(30)
+        ],
+        "quality_distribution": {
+            "complete": quality_buckets["complete"],
+            "complete_pct": round(quality_buckets["complete"] / total * 100, 1),
+            "partial": quality_buckets["partial"],
+            "partial_pct": round(quality_buckets["partial"] / total * 100, 1),
+            "sparse": quality_buckets["sparse"],
+            "sparse_pct": round(quality_buckets["sparse"] / total * 100, 1),
+        },
+        "source_files": [
+            {"file": f, "count": c}
+            for f, c in source_counter.most_common(10)
+        ],
+        "field_fill_rates": _compute_field_fill_rates(docs),
+    }
+
+
+def _compute_field_fill_rates(docs: list) -> list[dict]:
+    """Per-field fill rate as percentage across all documents."""
+    fields = [
+        ("title", "Title"),
+        ("brand", "Brand"),
+        ("summary", "Summary"),
+        ("enriched_description", "Description"),
+        ("key_features", "Key Features"),
+        ("technical_specifications", "Tech Specs"),
+        ("search_keywords", "Keywords"),
+        ("category_hierarchy", "Categories"),
+    ]
+    total = len(docs) or 1
+    result = []
+    for field_key, label in fields:
+        filled = sum(
+            1 for doc in docs
+            if isinstance(doc.get("metadata"), dict)
+            and doc["metadata"].get(field_key)
+            and (
+                not isinstance(doc["metadata"][field_key], (list, dict))
+                or len(doc["metadata"][field_key]) > 0
+            )
+        )
+        result.append({
+            "field": label,
+            "fill_rate": round(filled / total * 100, 1),
+            "filled": filled,
+            "total": total,
+        })
+    return result
+
+
+
 @router.post("/search")
 def search_products(req: ProductSearchQuery):
     """Semantic vector search against Supabase using all-MiniLM-L6-v2."""
@@ -468,3 +610,102 @@ def insert_product(req: ProductInsertRequest):
 
     resp = client.table("documents").insert(payload).execute()
     return {"status": "success", "data": resp.data}
+
+
+@router.post("/bulk-upload")
+async def bulk_upload_products(file: UploadFile = File(...)):
+    """Ingest products from an uploaded CSV or PDF file.
+
+    CSV files are processed via LlamaCloud Extract + Groq enrichment.
+    PDF files are parsed via LlamaParse and stored as document knowledge.
+
+    Returns a summary of how many products were ingested plus any errors.
+    """
+    from app.pipeline.ingestor import DocumentIngestor, EXTRACT_EXTENSIONS, LLAMAPARSE_EXTENSIONS
+    from app.db.vector_service import get_embedding
+
+    filename = file.filename or "upload"
+    ext = Path(filename).suffix.lower()
+
+    allowed = EXTRACT_EXTENSIONS | LLAMAPARSE_EXTENSIONS
+    if ext not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Allowed: {sorted(allowed)}",
+        )
+
+    # Save upload to a temp file so the ingestor can work with a real path
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        result = DocumentIngestor().ingest(tmp_path)
+    except RuntimeError as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    client = get_client()
+    ingested_ids: list[int] = []
+    errors: list[str] = []
+
+    # ---- CSV / XLSX path: enriched products list ---------------------------
+    if result.enriched:
+        for enriched in result.enriched:
+            try:
+                content = _product_to_text(enriched)
+                embedding = get_embedding(content)
+                metadata = {
+                    "title": enriched.title,
+                    "brand": enriched.brand,
+                    "category_hierarchy": enriched.category_hierarchy,
+                    "summary": enriched.summary,
+                    "enriched_description": enriched.enriched_description,
+                    "key_features": enriched.key_features,
+                    "technical_specifications": enriched.technical_specifications,
+                    "attributes": enriched.attributes,
+                    "search_keywords": enriched.search_keywords,
+                    "source_file": filename,
+                    "is_bulk_import": True,
+                }
+                doc_resp = client.table("documents").insert({
+                    "content": content,
+                    "metadata": metadata,
+                    "embedding": embedding,
+                }).execute()
+                if doc_resp.data:
+                    ingested_ids.append(doc_resp.data[0]["id"])
+            except Exception as exc:
+                errors.append(f"{enriched.title}: {exc}")
+
+    # ---- PDF / DOCX path: raw text document --------------------------------
+    elif result.raw_text:
+        try:
+            # Treat entire document as a single knowledge chunk
+            embedding = get_embedding(result.raw_text[:8000])  # truncate for embedding
+            metadata = {
+                "title": filename,
+                "source_file": filename,
+                "file_type": result.file_type,
+                "is_bulk_import": True,
+            }
+            doc_resp = client.table("documents").insert({
+                "content": result.raw_text,
+                "metadata": metadata,
+                "embedding": embedding,
+            }).execute()
+            if doc_resp.data:
+                ingested_ids.append(doc_resp.data[0]["id"])
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return {
+        "status": "success",
+        "file": filename,
+        "file_type": result.file_type,
+        "products_ingested": len(ingested_ids),
+        "document_ids": ingested_ids,
+        "errors": errors,
+    }

@@ -3,12 +3,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from app.db.supabase_client import get_client
-from app.models.schemas import Edge, ReviewDecision, ReviewQueueItem
+from app.models.schemas import ReviewDecision
 
 router = APIRouter(tags=["review"])
 
 
-@router.get("/edges/queue", response_model=list[ReviewQueueItem])
+@router.get("/edges/queue")
 def get_review_queue(limit: int = 50):
     """Convenience endpoint for the dashboard: proposed edges, each joined
     with its source/target nodes and source document, so the React queue UI
@@ -22,28 +22,32 @@ def get_review_queue(limit: int = 50):
         .limit(limit)
         .execute()
         .data
-    )
+    ) or []
 
     items = []
     for edge in edges:
-        source_node = client.table("nodes").select("*").eq("id", edge["source_node_id"]).execute().data[0]
-        target_node = client.table("nodes").select("*").eq("id", edge["target_node_id"]).execute().data[0]
-        source_doc = (
-            client.table("source_documents")
-            .select("*")
-            .eq("id", edge["source_document_id"])
-            .execute()
-            .data[0]
-        )
-        items.append(
-            ReviewQueueItem(
-                edge=edge, source_node=source_node, target_node=target_node, source_document=source_doc
+        try:
+            source_node_data = client.table("nodes").select("*").eq("id", edge["source_node_id"]).execute().data
+            target_node_data = client.table("nodes").select("*").eq("id", edge["target_node_id"]).execute().data
+            source_doc_data = (
+                client.table("source_documents")
+                .select("*")
+                .eq("id", edge.get("source_document_id", ""))
+                .execute()
+                .data
             )
-        )
+            items.append({
+                "edge": edge,
+                "source_node": source_node_data[0] if source_node_data else {"label": "Unknown"},
+                "target_node": target_node_data[0] if target_node_data else {"label": "Unknown"},
+                "source_document": source_doc_data[0] if source_doc_data else {"file_name": "Unknown"},
+            })
+        except Exception:
+            continue  # skip malformed edge rows
     return items
 
 
-@router.post("/edges/{edge_id}/review", response_model=Edge)
+@router.post("/edges/{edge_id}/review")
 def review_edge(edge_id: str, decision: ReviewDecision):
     """The single code path in the whole system that can move an edge out
     of status='proposed'. The pipeline (app/pipeline/*) has no access to
@@ -66,4 +70,4 @@ def review_edge(edge_id: str, decision: ReviewDecision):
         .execute()
         .data[0]
     )
-    return updated
+    return updated

@@ -81,6 +81,14 @@
           </svg>
           Add Product
         </button>
+        <button class="nav-tab" data-tab="analytics" id="tab-analytics">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
+          </svg>
+          Analytics
+        </button>
       </nav>
 
       <!-- Right Header Actions -->
@@ -337,13 +345,15 @@
 
     <!-- TAB 5: INGESTION / ADD PRODUCT STUDIO -->
     <section class="tab-content" id="view-ingest">
+
+      <!-- ── Row 1: Quick Add + Bulk Upload ─────────────────────────── -->
       <div class="ingest-grid">
         <div class="ingest-card">
           <div class="card-title-group">
             <span class="studio-badge">Autonomous Product Brain</span>
-            <h2 class="card-title">Quick Add & Auto-Enrich</h2>
+            <h2 class="card-title">Quick Add &amp; Auto-Enrich</h2>
             <p class="hero-subtext">Enter only the raw product details. The backend AI automatically enriches
-              specifications, generates 384-dim vector embeddings, and creates Knowledge Graph nodes & edges.</p>
+              specifications, generates 384-dim vector embeddings, and creates Knowledge Graph nodes &amp; edges.</p>
           </div>
 
           <form id="form-add-product" class="apple-form">
@@ -374,11 +384,11 @@
             <div class="auto-pipeline-badges">
               <div class="pipeline-badge"><span class="badge-icon">🧠</span> Auto-Enrichment</div>
               <div class="pipeline-badge"><span class="badge-icon">⚡</span> 384-dim Vector DB</div>
-              <div class="pipeline-badge"><span class="badge-icon">🕸️</span> Nodes & Edges Graph</div>
+              <div class="pipeline-badge"><span class="badge-icon">🕸️</span> Nodes &amp; Edges Graph</div>
             </div>
 
             <button type="submit" class="btn-primary-glow" id="btn-submit-product">
-              <span>Auto-Enrich & Ingest Product</span>
+              <span>Auto-Enrich &amp; Ingest Product</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12h14" />
                 <path d="m12 5 7 7-7 7" />
@@ -390,7 +400,78 @@
           <div id="add-product-result" style="display: none; margin-top: 1.5rem;"></div>
         </div>
 
-        <div class="ingest-card">
+        <!-- ── BULK UPLOAD CARD ──────────────────────────────────────── -->
+        <div class="ingest-card" id="bulk-upload-card">
+          <div class="card-title-group">
+            <span class="studio-badge">Batch Ingestion Pipeline</span>
+            <h2 class="card-title">Bulk Upload via CSV &amp; PDF</h2>
+            <p class="hero-subtext">Upload a product catalogue CSV or a supplier PDF. Each file is parsed, AI-enriched,
+              embedded into pgvector, and added to the Knowledge Graph automatically.</p>
+          </div>
+
+          <!-- Drag-and-Drop Zone -->
+          <div class="bulk-drop-zone" id="bulk-drop-zone" tabindex="0" role="button"
+            aria-label="Drop a CSV or PDF file here to bulk upload">
+            <input type="file" id="bulk-file-input" accept=".csv,.pdf,.xlsx,.docx" style="display:none;" />
+            <div class="drop-zone-inner" id="drop-zone-inner">
+              <div class="drop-zone-icon">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </div>
+              <div class="drop-zone-headline">Drop your file here</div>
+              <div class="drop-zone-sub">or <button class="drop-browse-link" id="btn-browse-file" type="button">browse
+                  to select</button></div>
+              <div class="drop-format-chips">
+                <span class="format-chip csv">CSV</span>
+                <span class="format-chip pdf">PDF</span>
+                <span class="format-chip">XLSX</span>
+                <span class="format-chip">DOCX</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected File Preview -->
+          <div class="bulk-file-preview" id="bulk-file-preview" style="display:none;">
+            <div class="file-preview-icon" id="bulk-file-type-icon">📄</div>
+            <div class="file-preview-info">
+              <div class="file-preview-name" id="bulk-file-name">filename.csv</div>
+              <div class="file-preview-meta" id="bulk-file-meta">0 KB</div>
+            </div>
+            <button class="file-remove-btn" id="btn-remove-file" title="Remove file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Auto-Pipeline Badges for Bulk -->
+          <div class="auto-pipeline-badges" style="margin-top: 1rem;">
+            <div class="pipeline-badge"><span class="badge-icon">📊</span> LlamaExtract (CSV)</div>
+            <div class="pipeline-badge"><span class="badge-icon">📑</span> LlamaParse (PDF)</div>
+            <div class="pipeline-badge"><span class="badge-icon">🧠</span> Groq Enrichment</div>
+          </div>
+
+          <button class="btn-primary-glow" id="btn-bulk-upload" disabled style="margin-top: 1.25rem; width: 100%;">
+            <span>Upload &amp; Ingest File</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </button>
+
+          <!-- Bulk Upload Result -->
+          <div id="bulk-upload-result" style="display: none; margin-top: 1.5rem;"></div>
+        </div>
+      </div>
+
+      <!-- ── Row 2: How It Works ─────────────────────────────────────── -->
+      <div class="ingest-grid" style="margin-top: 1.5rem;">
+        <div class="ingest-card" style="grid-column: 1 / -1;">
           <div class="card-title-group">
             <span class="studio-badge">Autonomous Pipeline</span>
             <h2 class="card-title">How It Works</h2>
@@ -398,11 +479,11 @@
               background.</p>
           </div>
 
-          <div class="pipeline-instruction-box">
+          <div class="pipeline-instruction-box" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div class="ingest-feature-item">
               <div class="feature-step-num">1</div>
               <div class="feature-step-content">
-                <strong>Instant AI Normalization & Enrichment</strong>
+                <strong>Instant AI Normalization &amp; Enrichment</strong>
                 <p>Groq LLM extracts clean titles, value propositions, technical specifications, and key features
                   directly from raw input.</p>
               </div>
@@ -420,7 +501,7 @@
             <div class="ingest-feature-item">
               <div class="feature-step-num">3</div>
               <div class="feature-step-content">
-                <strong>Knowledge Graph Nodes & Edges</strong>
+                <strong>Knowledge Graph Nodes &amp; Edges</strong>
                 <p>Creates Product, Brand, Category, Attribute, and Supplier graph nodes with provenance-tracked
                   relation edges.</p>
               </div>
@@ -436,6 +517,159 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- TAB 6: CATALOGUE ANALYTICS ───────────────────────────────────────── -->
+    <section class="tab-content" id="view-analytics">
+
+      <!-- Header -->
+      <div class="analytics-header-row">
+        <div>
+          <span class="hero-eyebrow">Product Intelligence</span>
+          <h2 class="section-title">Catalogue Analysis</h2>
+          <p class="hero-subtext">Live insights derived from every product record in your Supabase vector database.</p>
+        </div>
+        <button class="btn-secondary" id="btn-refresh-analytics">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Refresh
+        </button>
+      </div>
+
+      <!-- KPI Cards Row -->
+      <div class="analytics-kpi-row" id="analytics-kpi-row">
+        <div class="analytics-kpi-card">
+          <div class="kpi-icon blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18M9 21V9" />
+            </svg>
+          </div>
+          <div class="kpi-val" id="akpi-total">--</div>
+          <div class="kpi-label">Total Products</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="kpi-icon green">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div class="kpi-val" id="akpi-completeness">--</div>
+          <div class="kpi-label">Avg Completeness</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="kpi-icon purple">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+          </div>
+          <div class="kpi-val" id="akpi-brands">--</div>
+          <div class="kpi-label">Distinct Brands</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="kpi-icon orange">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3h18v18H3zM9 3v18M3 9h6M3 15h6M15 3v18M15 9h6M15 15h6" />
+            </svg>
+          </div>
+          <div class="kpi-val" id="akpi-categories">--</div>
+          <div class="kpi-label">Top-Level Categories</div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="analytics-charts-grid">
+
+        <!-- Brand Distribution -->
+        <div class="analytics-card" id="analytics-card-brands">
+          <div class="analytics-card-header">
+            <span class="studio-badge">Distribution</span>
+            <h3 class="analytics-card-title">Products by Brand</h3>
+          </div>
+          <div class="analytics-chart-area">
+            <canvas id="chartBrands" height="220"></canvas>
+          </div>
+          <div class="analytics-card-footer" id="analytics-brands-footer"></div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="analytics-card" id="analytics-card-categories">
+          <div class="analytics-card-header">
+            <span class="studio-badge">Taxonomy</span>
+            <h3 class="analytics-card-title">Category Breakdown</h3>
+          </div>
+          <div class="analytics-chart-area">
+            <canvas id="chartCategories" height="220"></canvas>
+          </div>
+          <div class="analytics-card-footer" id="analytics-categories-footer"></div>
+        </div>
+
+        <!-- Data Quality Distribution -->
+        <div class="analytics-card">
+          <div class="analytics-card-header">
+            <span class="studio-badge">Quality</span>
+            <h3 class="analytics-card-title">Data Quality Distribution</h3>
+          </div>
+          <div id="analytics-quality-body" style="padding: 1rem 0;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Source Provenance -->
+        <div class="analytics-card">
+          <div class="analytics-card-header">
+            <span class="studio-badge">Provenance</span>
+            <h3 class="analytics-card-title">Source File Origins</h3>
+          </div>
+          <div id="analytics-sources-body" style="padding: 0.5rem 0;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Field Fill Rates -->
+      <div class="analytics-card" style="margin-top: 1.5rem;" id="analytics-card-fillrates">
+        <div class="analytics-card-header">
+          <span class="studio-badge">Completeness</span>
+          <h3 class="analytics-card-title">Field Fill Rates — Data Completeness per Attribute</h3>
+        </div>
+        <div id="analytics-fillrates-body" style="padding: 1rem 0;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Keyword Cloud -->
+      <div class="analytics-card" style="margin-top: 1.5rem;" id="analytics-card-keywords">
+        <div class="analytics-card-header">
+          <span class="studio-badge">Intelligence</span>
+          <h3 class="analytics-card-title">Top Search Keywords Across Catalogue</h3>
+        </div>
+        <div class="analytics-keyword-cloud" id="analytics-keyword-cloud">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Loading / empty state -->
+      <div class="analytics-empty" id="analytics-empty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+          </div>
+          <h3>No catalogue data yet</h3>
+          <p>Add products via Quick Add or Bulk Upload to see analytics here.</p>
+        </div>
+      </div>
+
     </section>
 
   </main>
@@ -533,7 +767,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Graph Tooltip -->
-  <div id="graph-tooltip" style="display: none; position: absolute; z-index: 9999; pointer-events: none; background: var(--bg-card-hover); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--border-medium); border-radius: 8px; padding: 0.5rem 0.75rem; color: #fff; font-size: 0.8rem; box-shadow: var(--shadow-md); font-family: var(--font-sans); white-space: nowrap;"></div>
+  <div id="graph-tooltip"
+    style="display: none; position: absolute; z-index: 9999; pointer-events: none; background: var(--bg-card-hover); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid var(--border-medium); border-radius: 8px; padding: 0.5rem 0.75rem; color: #fff; font-size: 0.8rem; box-shadow: var(--shadow-md); font-family: var(--font-sans); white-space: nowrap;">
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
