@@ -614,70 +614,126 @@ function initProductForm() {
 }
 
 /* ==========================================================================
-   Knowledge Graph Visualizer (HTML5 Canvas Physics)
+   Knowledge Graph Visualizer (HTML5 Canvas, fed by live /graph data)
    ========================================================================== */
-function initGraphCanvas() {
-  const canvas = document.getElementById("graphCanvas");
-  if (!canvas) return;
-  canvas.width = canvas.parentElement.clientWidth;
-  canvas.height = canvas.parentElement.clientHeight;
+let currentGraphStatus = "approved";
+
+function nodeColor(nodeType) {
+  const t = (nodeType || "").toLowerCase();
+  if (t === "product") return "#2997ff";
+  if (t === "brand" || t === "supplier") return "#af52de";
+  if (t === "category") return "#30d158";
+  return "#ff9f0a"; // attribute/spec and anything else
 }
 
-function renderGraph() {
-  const canvas = document.getElementById("graphCanvas");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width = canvas.parentElement.clientWidth;
-  const h = canvas.height = canvas.parentElement.clientHeight;
+async function fetchGraphData(status) {
+  const res = await fetch(`${API_BASE}/graph?status=${status}`);
+  if (!res.ok) throw new Error(`Graph fetch failed: ${res.status}`);
+  return res.json(); // { nodes: [...], edges: [...] }
+}
 
+function layoutNodesInCircle(nodes, w, h) {
+  const cx = w / 2, cy = h / 2;
+  const radius = Math.min(w, h) * 0.35;
+  return nodes.map((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1);
+    return {
+      ...n,
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+      r: n.node_type === "product" ? 18 : 13,
+    };
+  });
+}
+
+function drawGraph(canvas, nodes, edges) {
+  const ctx = canvas.getContext("2d");
+  const w = (canvas.width = canvas.parentElement.clientWidth);
+  const h = (canvas.height = canvas.parentElement.clientHeight);
   ctx.clearRect(0, 0, w, h);
 
-  const nodes = [
-    { label: "Diablo Sanding Belt", type: "product", x: w * 0.35, y: h * 0.45, r: 18 },
-    { label: "Diablo", type: "brand", x: w * 0.2, y: h * 0.3, r: 14 },
-    { label: "Abrasives", type: "category", x: w * 0.5, y: h * 0.25, r: 16 },
-    { label: "Width: 1/2\"", type: "spec", x: w * 0.25, y: h * 0.65, r: 12 },
-    { label: "Length: 18\"", type: "spec", x: w * 0.45, y: h * 0.65, r: 12 },
-    { label: "3M Cubitron Disc", type: "product", x: w * 0.68, y: h * 0.5, r: 18 },
-    { label: "3M", type: "brand", x: w * 0.82, y: h * 0.35, r: 14 },
-    { label: "Grit: P150", type: "spec", x: w * 0.72, y: h * 0.72, r: 12 },
-  ];
+  if (!nodes.length) {
+    ctx.fillStyle = "#8e8e93";
+    ctx.font = "14px 'Instrument Sans', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No edges yet for this status — review some items first.", w / 2, h / 2);
+    return;
+  }
 
-  const edges = [
-    [0, 1], [0, 2], [0, 3], [0, 4],
-    [5, 6], [5, 2], [5, 7]
-  ];
+  const positioned = layoutNodesInCircle(nodes, w, h);
+  const byId = Object.fromEntries(positioned.map(n => [n.id, n]));
 
-  // Draw Edges
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  // Draw edges first (so nodes sit on top)
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
   ctx.lineWidth = 1.5;
-  edges.forEach(([s, t]) => {
+  edges.forEach(e => {
+    const s = byId[e.source_node_id];
+    const t = byId[e.target_node_id];
+    if (!s || !t) return;
     ctx.beginPath();
-    ctx.moveTo(nodes[s].x, nodes[s].y);
-    ctx.lineTo(nodes[t].x, nodes[t].y);
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(t.x, t.y);
     ctx.stroke();
   });
 
-  // Draw Nodes
-  nodes.forEach(n => {
+  // Draw nodes
+  positioned.forEach(n => {
     ctx.beginPath();
     ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-    if (n.type === "product") ctx.fillStyle = "#2997ff";
-    else if (n.type === "brand") ctx.fillStyle = "#af52de";
-    else if (n.type === "category") ctx.fillStyle = "#30d158";
-    else ctx.fillStyle = "#ff9f0a";
+    ctx.fillStyle = nodeColor(n.node_type);
     ctx.fill();
-
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Text Label
     ctx.fillStyle = "#f5f5f7";
     ctx.font = "11px 'Instrument Sans', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(n.label, n.x, n.y + n.r + 14);
   });
+}
+
+function initGraphCanvas() {
+  const canvas = document.getElementById("graphCanvas");
+  if (!canvas) return;
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+
+  const approvedBtn = document.getElementById("btn-graph-approved");
+  const proposedBtn = document.getElementById("btn-graph-proposed");
+  if (approvedBtn && proposedBtn) {
+    approvedBtn.addEventListener("click", () => {
+      currentGraphStatus = "approved";
+      approvedBtn.classList.add("active");
+      proposedBtn.classList.remove("active");
+      renderGraph();
+    });
+    proposedBtn.addEventListener("click", () => {
+      currentGraphStatus = "proposed";
+      proposedBtn.classList.add("active");
+      approvedBtn.classList.remove("active");
+      renderGraph();
+    });
+  }
+}
+
+async function renderGraph() {
+  const canvas = document.getElementById("graphCanvas");
+  if (!canvas) return;
+  try {
+    const { nodes, edges } = await fetchGraphData(currentGraphStatus);
+    drawGraph(canvas, nodes, edges);
+  } catch (err) {
+    console.error("Failed to load graph:", err);
+    const ctx = canvas.getContext("2d");
+    const w = (canvas.width = canvas.parentElement.clientWidth);
+    const h = (canvas.height = canvas.parentElement.clientHeight);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#ff6b6b";
+    ctx.font = "14px 'Instrument Sans', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Couldn't load graph data from the backend.", w / 2, h / 2);
+  }
 }
 
 /* ==========================================================================
