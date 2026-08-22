@@ -58,7 +58,7 @@ let currentSearchQuery = "";
 let activeViewMode = "grid";
 
 // API Base URL (Relative for seamless reverse proxy / static mount)
-const API_BASE = "http://localhost:8000";
+const API_BASE = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
