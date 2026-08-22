@@ -58,7 +58,7 @@ let currentSearchQuery = "";
 let activeViewMode = "grid";
 
 // API Base URL (Relative for seamless reverse proxy / static mount)
-const API_BASE = "http://localhost:8000";
+const API_BASE = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
@@ -617,6 +617,8 @@ function initProductForm() {
    Knowledge Graph Visualizer (HTML5 Canvas, fed by live /graph data)
    ========================================================================== */
 let currentGraphStatus = "approved";
+let currentGraphNodes = [];
+let currentGraphEdges = [];
 
 function nodeColor(nodeType) {
   const t = (nodeType || "").toLowerCase();
@@ -657,10 +659,14 @@ function drawGraph(canvas, nodes, edges) {
     ctx.font = "14px 'Instrument Sans', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("No edges yet for this status — review some items first.", w / 2, h / 2);
+    currentGraphNodes = [];
+    currentGraphEdges = [];
     return;
   }
 
   const positioned = layoutNodesInCircle(nodes, w, h);
+  currentGraphNodes = positioned;
+  currentGraphEdges = edges;
   const byId = Object.fromEntries(positioned.map(n => [n.id, n]));
 
   // Draw edges first (so nodes sit on top)
@@ -698,6 +704,59 @@ function initGraphCanvas() {
   if (!canvas) return;
   canvas.width = canvas.parentElement.clientWidth;
   canvas.height = canvas.parentElement.clientHeight;
+
+  const tooltip = document.getElementById("graph-tooltip");
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!currentGraphNodes || !currentGraphNodes.length) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    let hoveredNode = null;
+    for (let i = currentGraphNodes.length - 1; i >= 0; i--) {
+      const n = currentGraphNodes[i];
+      if (Math.hypot(n.x - mouseX, n.y - mouseY) <= n.r) {
+        hoveredNode = n;
+        break;
+      }
+    }
+
+    if (hoveredNode) {
+      canvas.style.cursor = "pointer";
+      let tooltipText = hoveredNode.label;
+      
+      const type = (hoveredNode.node_type || "").toLowerCase();
+      if (type === "attribute" || type === "spec") {
+        const edge = currentGraphEdges.find(ed => ed.target_node_id === hoveredNode.id);
+        if (edge) {
+          const sourceNode = currentGraphNodes.find(n => n.id === edge.source_node_id);
+          if (sourceNode) {
+            tooltipText = `${hoveredNode.label} — part of ${sourceNode.label}`;
+          }
+        }
+      }
+
+      if (tooltip) {
+        tooltip.textContent = tooltipText;
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.pageX + 15) + "px";
+        tooltip.style.top = (e.pageY + 15) + "px";
+      }
+    } else {
+      canvas.style.cursor = "default";
+      if (tooltip) tooltip.style.display = "none";
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+    if (tooltip) tooltip.style.display = "none";
+  });
+
+  window.addEventListener("resize", () => {
+    if (tooltip) tooltip.style.display = "none";
+  });
 
   const approvedBtn = document.getElementById("btn-graph-approved");
   const proposedBtn = document.getElementById("btn-graph-proposed");
