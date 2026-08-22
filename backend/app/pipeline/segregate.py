@@ -53,7 +53,7 @@ def _segregate_via_groq(doc: ParsedDocument, api_key: str) -> SegregationResult:
 
     client = Groq(api_key=api_key)
     completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": _SEGREGATION_SYSTEM_PROMPT},

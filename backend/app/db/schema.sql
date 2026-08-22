@@ -41,3 +41,43 @@ as $$
   order by similarity desc
   limit match_count;
 $$;
+
+-- 6. Create graph tables
+create table if not exists source_documents (
+    id uuid primary key default gen_random_uuid(),
+    file_name text,
+    file_type text,
+    raw_text text,
+    parsed_at timestamptz default now()
+);
+
+create table if not exists nodes (
+    id uuid primary key default gen_random_uuid(),
+    node_type text,
+    label text,
+    properties jsonb default '{}',
+    created_at timestamptz default now()
+);
+
+create table if not exists edges (
+    id uuid primary key default gen_random_uuid(),
+    source_node_id uuid references nodes(id),
+    target_node_id uuid references nodes(id),
+    relation text,
+    value jsonb,
+    confidence real,
+    source_document_id uuid references source_documents(id),
+    status text default 'proposed',
+    reviewed_by text,
+    reviewed_at timestamptz,
+    created_at timestamptz default now()
+);
+
+create index if not exists edges_source_node_id_idx on edges(source_node_id);
+create index if not exists edges_target_node_id_idx on edges(target_node_id);
+create index if not exists edges_source_document_id_idx on edges(source_document_id);
+create index if not exists edges_status_idx on edges(status);
+
+alter table nodes disable row level security;
+alter table source_documents disable row level security;
+alter table edges disable row level security;
